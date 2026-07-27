@@ -5,13 +5,14 @@
  * One-time local setup script. Prompts for the pepper and each PIN
  * using hidden terminal input. Never echoes, logs, or stores entered values.
  *
+ * Uses modular firebase-admin v14 API (getAuth, getFirestore, Timestamp).
+ *
  * Usage:
  *   node scripts/bootstrap.js
  *
  * Requirements:
  *   - Firebase project upgraded to Blaze plan
- *   - service account key via GOOGLE_APPLICATION_CREDENTIALS or firebase login
- *   - Admin SDK accessible from project root
+ *   - firebase-admin and bcrypt installed in project root or functions/
  */
 
 import { createRequire } from "module";
@@ -20,6 +21,8 @@ import { stdin as input, stdout as output } from "node:process";
 
 const require = createRequire(import.meta.url);
 const admin = require("firebase-admin");
+const { getAuth } = require("firebase-admin/auth");
+const { getFirestore, Timestamp } = require("firebase-admin/firestore");
 const bcrypt = require("bcrypt");
 
 const ACCOUNTS = [
@@ -29,14 +32,13 @@ const ACCOUNTS = [
 ];
 
 async function hiddenQuestion(prompt) {
-  const rl = readline.createInterface({ input, output });
   return new Promise((resolve) => {
     output.write(prompt);
     const stdin = process.stdin;
     const isRaw = stdin.isRaw;
     stdin.setRawMode(true);
     stdin.resume();
-    let input = "";
+    let value = "";
     const handler = (key) => {
       const byte = key[0];
       if (byte === 0x0d || byte === 0x0a) {
@@ -44,12 +46,11 @@ async function hiddenQuestion(prompt) {
         stdin.pause();
         stdin.removeListener("data", handler);
         output.write("\n");
-        rl.close();
-        resolve(input);
+        resolve(value);
       } else if (byte === 0x7f || byte === 0x08) {
-        input = input.slice(0, -1);
+        value = value.slice(0, -1);
       } else if (byte >= 0x20 && byte <= 0x7e) {
-        input += key;
+        value += key;
       }
     };
     stdin.on("data", handler);
@@ -70,12 +71,11 @@ async function main() {
     process.exit(0);
   }
 
-  // Get pepper via hidden input (must match firebase functions:secrets:set value)
   const pepper = await hiddenQuestion("Enter OPERATIONAL_LOGIN_PEPPER (hidden input): ");
 
   admin.initializeApp({ projectId: "receptionhub-f0e7a" });
-  const auth = admin.auth();
-  const db = admin.firestore();
+  const auth = getAuth();
+  const db = getFirestore();
 
   for (const acct of ACCOUNTS) {
     const pin = await hiddenQuestion("PIN for " + acct.displayName + " (4 digits, hidden): ");
@@ -108,7 +108,7 @@ async function main() {
 
     await auth.setCustomUserClaims(uid, { accountKey: acct.accountKey, role: acct.role, office: acct.office });
     const pepperedHash = await bcrypt.hash(pin + pepper, 12);
-    const now = admin.firestore.Timestamp.now();
+    const now = Timestamp.now();
 
     await db.collection("operationalAccounts").doc(uid).set({
       accountKey: acct.accountKey, uid, displayName: acct.displayName,
@@ -120,14 +120,8 @@ async function main() {
       role: acct.role, office: acct.office, active: true, createdAt: now, updatedAt: now,
     });
 
-    // Clear PIN from memory
-    pin.length = 0;
-
     console.log("OK (" + uid + ")");
   }
-
-  // Clear pepper from memory
-  pepper.length = 0;
 
   console.log("----------------------------------------");
   console.log("Bootstrap complete.");
