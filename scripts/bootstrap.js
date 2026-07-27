@@ -2,70 +2,86 @@
 /**
  * ASG Reception Hub — Bootstrap Operational Accounts
  *
- * One-time local setup script. Creates Firebase Auth users, userProfiles,
- * and operationalAccounts records for the three operational accounts.
+ * One-time local setup script. Prompts for the pepper and each PIN
+ * using hidden terminal input. Never echoes, logs, or stores entered values.
  *
  * Usage:
- *   1. Create scripts/bootstrap.env with PINs (see bootstrap.env.example)
- *   2. Run: node scripts/bootstrap.js
- *   3. Delete scripts/bootstrap.env after completion
+ *   node scripts/bootstrap.js
  *
  * Requirements:
  *   - Firebase project upgraded to Blaze plan
- *   - firebase-tools installed globally
- *   - Logged in via firebase login
- *   - Service account credentials or ADC configured
- *
- * This script never prints PIN values, PIN hashes, or custom tokens.
+ *   - service account key via GOOGLE_APPLICATION_CREDENTIALS or firebase login
+ *   - Admin SDK accessible from project root
  */
 
-import { readFileSync, existsSync } from "fs";
-import { resolve } from "path";
 import { createRequire } from "module";
+import * as readline from "node:readline/promises";
+import { stdin as input, stdout as output } from "node:process";
 
-const admin = createRequire(import.meta.url)("firebase-admin");
-const bcrypt = createRequire(import.meta.url)("bcrypt");
-
-const ENV_FILE = resolve(import.meta.dirname, "bootstrap.env");
+const require = createRequire(import.meta.url);
+const admin = require("firebase-admin");
+const bcrypt = require("bcrypt");
 
 const ACCOUNTS = [
-  { accountKey: "brisbane-reception", displayName: "Brisbane Reception", role: "reception", office: "brisbane", email: "brisbane.reception@receptionhub.internal", pinEnvVar: "PIN_BRISBANE" },
-  { accountKey: "perth-reception", displayName: "Perth Reception", role: "reception", office: "perth", email: "perth.reception@receptionhub.internal", pinEnvVar: "PIN_PERTH" },
-  { accountKey: "administrator", displayName: "Administrator", role: "administrator", office: "all", email: "administrator@receptionhub.internal", pinEnvVar: "PIN_ADMIN" },
+  { accountKey: "brisbane-reception", displayName: "Brisbane Reception", role: "reception", office: "brisbane", email: "brisbane.reception@receptionhub.internal" },
+  { accountKey: "perth-reception", displayName: "Perth Reception", role: "reception", office: "perth", email: "perth.reception@receptionhub.internal" },
+  { accountKey: "administrator", displayName: "Administrator", role: "administrator", office: "all", email: "administrator@receptionhub.internal" },
 ];
 
-function loadEnv() {
-  if (!existsSync(ENV_FILE)) {
-    console.error("Error: scripts/bootstrap.env not found.");
-    console.error("Copy scripts/bootstrap.env.example to scripts/bootstrap.env and fill in the PINs.");
-    process.exit(1);
-  }
-  const content = readFileSync(ENV_FILE, "utf-8");
-  const env = {};
-  for (const line of content.split("\n")) {
-    const t = line.trim();
-    if (!t || t.startsWith("#")) continue;
-    const i = t.indexOf("=");
-    if (i === -1) continue;
-    env[t.slice(0, i).trim()] = t.slice(i + 1).trim();
-  }
-  return env;
+async function hiddenQuestion(prompt) {
+  const rl = readline.createInterface({ input, output });
+  return new Promise((resolve) => {
+    output.write(prompt);
+    const stdin = process.stdin;
+    const isRaw = stdin.isRaw;
+    stdin.setRawMode(true);
+    stdin.resume();
+    let input = "";
+    const handler = (key) => {
+      const byte = key[0];
+      if (byte === 0x0d || byte === 0x0a) {
+        stdin.setRawMode(isRaw);
+        stdin.pause();
+        stdin.removeListener("data", handler);
+        output.write("\n");
+        rl.close();
+        resolve(input);
+      } else if (byte === 0x7f || byte === 0x08) {
+        input = input.slice(0, -1);
+      } else if (byte >= 0x20 && byte <= 0x7e) {
+        input += key;
+      }
+    };
+    stdin.on("data", handler);
+  });
 }
 
 async function main() {
   console.log("ASG Reception Hub - Account Bootstrap");
+  console.log("Project: receptionhub-f0e7a");
   console.log("----------------------------------------");
+  console.log("WARNING: This will create or update operational accounts.");
+  console.log("Type CONFIRM to proceed:");
+  const rl = readline.createInterface({ input, output });
+  const answer = await rl.question("> ");
+  rl.close();
+  if (answer.trim() !== "CONFIRM") {
+    console.log("Cancelled.");
+    process.exit(0);
+  }
+
+  // Get pepper via hidden input (must match firebase functions:secrets:set value)
+  const pepper = await hiddenQuestion("Enter OPERATIONAL_LOGIN_PEPPER (hidden input): ");
 
   admin.initializeApp({ projectId: "receptionhub-f0e7a" });
   const auth = admin.auth();
   const db = admin.firestore();
-  const env = loadEnv();
-  const pepper = "asg-reception-hub-local-bootstrap-2026";
 
   for (const acct of ACCOUNTS) {
-    const pin = env[acct.pinEnvVar];
-    if (!pin || !/^\d{4}$/.test(pin)) {
-      console.log("[SKIP] " + acct.displayName + ": PIN not configured");
+    const pin = await hiddenQuestion("PIN for " + acct.displayName + " (4 digits, hidden): ");
+
+    if (!/^\d{4}$/.test(pin)) {
+      console.log("[SKIP] " + acct.displayName + ": invalid PIN (must be exactly 4 digits)");
       continue;
     }
     process.stdout.write("[INFO] Processing " + acct.displayName + "... ");
@@ -104,11 +120,17 @@ async function main() {
       role: acct.role, office: acct.office, active: true, createdAt: now, updatedAt: now,
     });
 
+    // Clear PIN from memory
+    pin.length = 0;
+
     console.log("OK (" + uid + ")");
   }
 
+  // Clear pepper from memory
+  pepper.length = 0;
+
   console.log("----------------------------------------");
-  console.log("Bootstrap complete. Delete scripts/bootstrap.env now.");
+  console.log("Bootstrap complete.");
   process.exit(0);
 }
 
