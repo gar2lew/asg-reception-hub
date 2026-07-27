@@ -1,0 +1,61 @@
+:root {
+  /* Navy palette */
+  --asg-navy-950: #06182f;
+  --asg-navy-900: #0b203c;
+  --asg-navy-800: #132b49;
+  --asg-navy-700: #1c3a5e;
+  /* Gold accents */
+  --asg-gold-500: #c99a35;
+  --asg-gold-400: #ddb459;
+  --asg-gold-300: #e8cc7a;
+  --asg-gold-100: #f5e9cc;
+  /* Warm cream surfaces */
+  --asg-cream-50: #f8f3e9;
+  --asg-cream-100: #f2ebde;
+  --asg-cream-200: #e8ddcc;
+  --asg-surface: #fffdf8;
+  /* Text */
+  --asg-text: #0b203c;
+  --asg-text-secondary: #1c3a5e;
+  --asg-muted: #746f67;
+  --asg-muted-light: #9e978e;
+  /* Borders */
+  --asg-border: #ddd3c3;
+  --asg-border-light: #ede5d8;
+  /* Semantic */
+  --asg-success: #2d7d46;
+  --asg-success-bg: #e8f5ed;
+  --asg-warning: #b8860b;
+  --asg-warning-bg: #fef7e0;
+  --asg-danger: #b33c2f;
+  --asg-danger-bg: #fde8e5;
+  --asg-info: #1a5c8a;
+  --asg-info-bg: #e4eff7;
+  /* Typography */
+  --asg-font-heading: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --asg-font-body: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+  --asg-font-mono: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+  /* Spacing */
+  --asg-space-xs: 4px;
+  --asg-space-sm: 8px;
+  --asg-space-md: 16px;
+  --asg-space-lg: 24px;
+  --asg-space-xl: 32px;
+  --asg-space-2xl: 48px;
+  --asg-space-3xl: 64px;
+  /* Radii */
+  --asg-radius-sm: 4px;
+  --asg-radius-md: 8px;
+  --asg-radius-lg: 12px;
+  --asg-radius-xl: 16px;
+  --asg-radius-full: 9999px;
+  /* Shadows */
+  --asg-shadow-sm: 0 1px 2px rgba(6, 24, 47, 0.06);
+  --asg-shadow-md: 0 4px 12px rgba(6, 24, 47, 0.08);
+  --asg-shadow-lg: 0 8px 24px rgba(6, 24, 47, 0.12);
+  --asg-shadow-gold: 0 2px 8px rgba(201, 154, 53, 0.15);
+  /* Layout */
+  --asg-sidebar-width: 260px;
+  --asg-sidebar-collapsed: 72px;
+  --asg-header-height: 56px;
+}

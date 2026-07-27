@@ -1,0 +1,21 @@
+.page { max-width: 1000px; }
+.pageTitle { font-family: var(--asg-font-heading); font-size: 1.5rem; color: var(--asg-navy-900); margin-bottom: var(--asg-space-lg); }
+.table { display: flex; flex-direction: column; }
+.tableHeader, .tableRow {
+  display: grid;
+  grid-template-columns: 2fr 80px 120px 120px 160px;
+  gap: 8px;
+  padding: 10px 0;
+  align-items: center;
+  font-size: 0.85rem;
+}
+.tableHeader { border-bottom: 2px solid var(--asg-border); font-weight: 600; color: var(--asg-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
+.tableRow { border-bottom: 1px solid var(--asg-border-light); }
+.tableRow:last-child { border-bottom: none; }
+.resourceName { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.rowIcon { color: var(--asg-gold-500); flex-shrink: 0; }
+.modalForm { display: flex; flex-direction: column; gap: var(--asg-space-md); }
+.modalActions { display: flex; gap: 8px; justify-content: flex-end; }
+@media (max-width: 768px) {
+  .tableHeader, .tableRow { grid-template-columns: 1fr 1fr; }
+}

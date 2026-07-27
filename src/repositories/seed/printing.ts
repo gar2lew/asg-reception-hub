@@ -1,0 +1,8 @@
+import type { PrintResource } from '../../models';
+export const SEED_PRINTING: PrintResource[] = [
+  { id: 'print-001', name: 'FC Booklets', estimatedQuantity: 50, preferredMinimum: 20, lastPrintedDate: '2025-06-20', quantityLastPrinted: 50, printedBy: 'Sarah Chen', checkFrequencyDays: 14, notes: 'A5 booklets used for initial client consultations.', updatedAt: '2025-01-01T00:00:00.000Z' },
+  { id: 'print-002', name: 'FR Booklets', estimatedQuantity: 40, preferredMinimum: 15, lastPrintedDate: '2025-06-18', quantityLastPrinted: 40, printedBy: 'Sarah Chen', checkFrequencyDays: 14, notes: 'Full review booklets for ongoing client engagements.', updatedAt: '2025-01-01T00:00:00.000Z' },
+  { id: 'print-003', name: 'DQ Sheets', estimatedQuantity: 80, preferredMinimum: 30, lastPrintedDate: '2025-06-22', quantityLastPrinted: 80, printedBy: 'Emma Johnson', checkFrequencyDays: 14, notes: 'Discovery questionnaire sheets for new client meetings.', updatedAt: '2025-01-01T00:00:00.000Z' },
+  { id: 'print-004', name: 'Business Cards — ASG Standard', estimatedQuantity: 200, preferredMinimum: 50, lastPrintedDate: '2025-05-01', quantityLastPrinted: 200, printedBy: 'Sarah Chen', checkFrequencyDays: 90, notes: 'Standard ASG business cards. Order from Vistaprint.', updatedAt: '2025-01-01T00:00:00.000Z' },
+  { id: 'print-005', name: 'Compliment Slips', estimatedQuantity: 100, preferredMinimum: 50, lastPrintedDate: '2025-04-10', quantityLastPrinted: 100, printedBy: 'Sarah Chen', checkFrequencyDays: 60, notes: 'ASG branded compliment slips for correspondence.', updatedAt: '2025-01-01T00:00:00.000Z' },
+];

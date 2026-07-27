@@ -1,0 +1,14 @@
+.wrapper { display: flex; flex-direction: column; gap: 4px; }
+.label { font-size: 0.8125rem; font-weight: 600; color: var(--asg-text-secondary); }
+.select {
+  padding: 8px 12px;
+  border: 1px solid var(--asg-border);
+  border-radius: var(--asg-radius-md);
+  background: white;
+  color: var(--asg-text);
+  font-size: 0.9375rem;
+  transition: border-color 0.15s;
+  outline: none;
+  cursor: pointer;
+}
+.select:focus { border-color: var(--asg-gold-500); box-shadow: 0 0 0 2px var(--asg-gold-100); }

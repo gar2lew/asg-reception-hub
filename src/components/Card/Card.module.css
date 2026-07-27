@@ -1,0 +1,22 @@
+.card {
+  background: var(--asg-surface);
+  border: 1px solid var(--asg-border-light);
+  border-radius: var(--asg-radius-lg);
+  box-shadow: var(--asg-shadow-sm);
+}
+.none { padding: 0; }
+.sm { padding: var(--asg-space-md); }
+.md { padding: var(--asg-space-lg); }
+.lg { padding: var(--asg-space-xl); }
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--asg-space-md);
+}
+.title {
+  font-family: var(--asg-font-body);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--asg-navy-900);
+}

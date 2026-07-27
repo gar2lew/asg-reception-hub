@@ -1,0 +1,49 @@
+.page { max-width: 1200px; }
+.overview { margin-bottom: var(--asg-space-lg); }
+.grid { display: grid; grid-template-columns: 1fr 320px; gap: var(--asg-space-lg); }
+.colMain { display: flex; flex-direction: column; gap: var(--asg-space-lg); }
+.colSide { display: flex; flex-direction: column; gap: var(--asg-space-lg); }
+.taskList { display: flex; flex-direction: column; }
+.taskItem {
+  display: flex;
+  align-items: center;
+  gap: var(--asg-space-sm);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--asg-border-light);
+}
+.taskItem:last-child { border-bottom: none; }
+.taskInfo { flex: 1; min-width: 0; }
+.taskTitle { font-size: 0.85rem; font-weight: 500; color: var(--asg-text); display: block; }
+.dueTime { font-size: 0.75rem; color: var(--asg-muted); }
+.taskActions { display: flex; gap: 4px; align-items: center; }
+.actionBtn {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: var(--asg-radius-sm);
+  color: var(--asg-muted); font-size: 0.85rem;
+  transition: all 0.15s;
+}
+.actionBtn:hover { background: var(--asg-cream-50); color: var(--asg-success); }
+.taskIcon { color: var(--asg-gold-500); flex-shrink: 0; }
+.warnIcon { color: var(--asg-danger); flex-shrink: 0; }
+.empty { font-size: 0.85rem; color: var(--asg-muted-light); padding: 12px 0; text-align: center; }
+.helpList { display: flex; flex-direction: column; gap: 8px; }
+.helpItem { padding: 8px 0; border-bottom: 1px solid var(--asg-border-light); }
+.helpItem:last-child { border-bottom: none; }
+.helpName { font-weight: 600; font-size: 0.85rem; color: var(--asg-text); }
+.helpRole { font-size: 0.75rem; color: var(--asg-muted); margin-bottom: 4px; }
+.helpContact { display: flex; align-items: center; gap: 4px; font-size: 0.8rem; color: var(--asg-text-secondary); }
+.emergency { color: var(--asg-danger); font-weight: 600; }
+.helpNote { font-size: 0.75rem; color: var(--asg-muted-light); margin-top: 2px; }
+.guidance {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  background: var(--asg-warning-bg);
+  border-radius: var(--asg-radius-md);
+  color: var(--asg-warning);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+@media (max-width: 900px) {
+  .grid { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,38 @@
+.dialog {
+  border: 1px solid var(--asg-border);
+  border-radius: var(--asg-radius-xl);
+  padding: 0;
+  background: var(--asg-surface);
+  max-width: 560px;
+  width: min(90vw, 560px);
+  box-shadow: var(--asg-shadow-lg);
+  font-family: var(--asg-font-body);
+}
+.dialog::backdrop {
+  background: rgba(6, 24, 47, 0.4);
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--asg-space-lg) var(--asg-space-lg) 0;
+}
+.title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--asg-navy-900);
+}
+.close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--asg-radius-sm);
+  color: var(--asg-muted);
+  transition: all 0.15s;
+}
+.close:hover { background: var(--asg-cream-50); color: var(--asg-text); }
+.body {
+  padding: var(--asg-space-md) var(--asg-space-lg) var(--asg-space-lg);
+}

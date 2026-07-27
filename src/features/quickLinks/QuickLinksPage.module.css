@@ -1,0 +1,13 @@
+.page { max-width: 1000px; }
+.pageTitle { font-family: var(--asg-font-heading); font-size: 1.5rem; color: var(--asg-navy-900); margin-bottom: var(--asg-space-lg); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--asg-space-lg); }
+.list { display: flex; flex-direction: column; }
+.link {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0; border-bottom: 1px solid var(--asg-border-light);
+  transition: opacity 0.15s; text-decoration: none;
+}
+.link:last-child { border-bottom: none; }
+.link:hover { opacity: 0.7; }
+.linkTitle { font-size: 0.85rem; font-weight: 500; color: var(--asg-text); }
+.linkIcon { color: var(--asg-muted-light); flex-shrink: 0; }

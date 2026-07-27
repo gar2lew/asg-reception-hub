@@ -1,0 +1,50 @@
+.page { max-width: 900px; }
+.pageTitle {
+  font-family: var(--asg-font-heading);
+  font-size: 1.5rem;
+  color: var(--asg-navy-900);
+  margin-bottom: var(--asg-space-lg);
+}
+.section { margin-bottom: var(--asg-space-lg); }
+.taskList { display: flex; flex-direction: column; }
+.taskItem {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--asg-border-light);
+}
+.taskItem:last-child { border-bottom: none; }
+.taskMain { display: flex; align-items: flex-start; gap: var(--asg-space-md); }
+.taskInfo { flex: 1; min-width: 0; }
+.taskTitle { font-size: 0.9rem; font-weight: 600; color: var(--asg-text); display: block; margin-bottom: 4px; }
+.taskMeta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; }
+.metaItem { font-size: 0.75rem; color: var(--asg-muted); }
+.taskDesc { font-size: 0.8rem; color: var(--asg-muted); line-height: 1.5; }
+.taskActions { display: flex; gap: 4px; flex-shrink: 0; }
+.iconBtn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: var(--asg-radius-sm);
+  color: var(--asg-muted); transition: all 0.15s;
+}
+.iconBtn:hover { background: var(--asg-cream-50); color: var(--asg-text); }
+.taskLinks {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin-top: 8px; padding: 8px 12px;
+  background: var(--asg-cream-50); border-radius: var(--asg-radius-sm);
+  font-size: 0.8rem;
+}
+.linkItem { display: flex; align-items: center; gap: 4px; color: var(--asg-text-secondary); }
+.linkItem:hover { color: var(--asg-gold-500); }
+.notePreview {
+  display: flex; align-items: center; gap: 4px;
+  margin-top: 6px; font-size: 0.8rem; color: var(--asg-muted);
+  padding: 6px 10px; background: var(--asg-info-bg); border-radius: var(--asg-radius-sm);
+}
+.noteForm { display: flex; flex-direction: column; gap: var(--asg-space-md); }
+.noteLabel { font-size: 0.85rem; font-weight: 600; color: var(--asg-text-secondary); }
+.noteInput {
+  width: 100%; padding: 10px; border: 1px solid var(--asg-border);
+  border-radius: var(--asg-radius-md); font-family: var(--asg-font-body);
+  font-size: 0.875rem; resize: vertical; outline: none;
+}
+.noteInput:focus { border-color: var(--asg-gold-500); box-shadow: 0 0 0 2px var(--asg-gold-100); }
+.noteActions { display: flex; gap: 8px; justify-content: flex-end; }
+.empty { text-align: center; color: var(--asg-muted-light); padding: 24px; }
