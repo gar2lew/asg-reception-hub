@@ -17,6 +17,14 @@ dist-ssr
 firebase-debug.log
 .firebase/
 
+# Firebase Functions output
+functions/node_modules/
+functions/lib/
+
+# Bootstrap and local scripts
+scripts/bootstrap.env
+scripts/*.local
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

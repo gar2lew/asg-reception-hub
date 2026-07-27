@@ -1,0 +1,114 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===== Helper functions =====
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function hasActiveProfile() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/userProfiles/$(request.auth.uid))
+        && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.active == true;
+    }
+
+    function isAdministrator() {
+      return hasActiveProfile()
+        && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role == 'administrator';
+    }
+
+    function isReception() {
+      return hasActiveProfile()
+        && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role == 'reception';
+    }
+
+    function isOwnProfile(uid: string) {
+      return request.auth.uid == uid;
+    }
+
+    // ===== Protected: operational accounts — no client access =====
+    match /operationalAccounts/{document} {
+      allow read, write: if false;
+    }
+
+    // ===== User profiles — restricted =====
+    match /userProfiles/{uid} {
+      // Users can read their own profile
+      allow read: if isSignedIn() && (isOwnProfile(uid) || isAdministrator());
+      // Users cannot create their own profile
+      allow create: if false;
+      // Only administrators can update profiles
+      allow update: if isAdministrator()
+        // Prevent users from changing role, office, or active status
+        && (!request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['role', 'office', 'active', 'uid']));
+      allow delete: if false;
+    }
+
+    // ===== System bootstrap metadata =====
+    match /system/{document} {
+      allow read: if isSignedIn();
+      allow write: if isAdministrator();
+    }
+
+    // ===== Operational collections (tasks, training, etc.) =====
+    match /taskDefinitions/{document} {
+      allow read: if hasActiveProfile();
+      allow create, update: if isAdministrator();
+      allow delete: if isAdministrator();
+    }
+
+    match /dailyTaskInstances/{document} {
+      allow read: if hasActiveProfile();
+      allow create, update: if hasActiveProfile();
+      allow delete: if false;
+    }
+
+    match /trainingItems/{document} {
+      allow read: if hasActiveProfile();
+      allow create, update: if isAdministrator();
+      allow delete: if isAdministrator();
+    }
+
+    match /trainingAssignments/{document} {
+      allow read: if hasActiveProfile();
+      allow create, update: if hasActiveProfile();
+      allow delete: if false;
+    }
+
+    match /contacts/{document} {
+      allow read: if hasActiveProfile();
+      allow write: if isAdministrator();
+    }
+
+    match /quickLinks/{document} {
+      allow read: if hasActiveProfile();
+      allow write: if isAdministrator();
+    }
+
+    match /stockItems/{document} {
+      allow read: if hasActiveProfile();
+      allow create, update: if hasActiveProfile();
+      allow delete: if isAdministrator();
+    }
+
+    match /printingItems/{document} {
+      allow read: if hasActiveProfile();
+      allow create, update: if hasActiveProfile();
+      allow delete: if isAdministrator();
+    }
+
+    match /announcements/{document} {
+      allow read: if hasActiveProfile();
+      allow write: if isAdministrator();
+    }
+
+    // ===== Deny everything else =====
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
