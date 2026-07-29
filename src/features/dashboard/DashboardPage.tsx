@@ -109,9 +109,9 @@ export function DashboardPage() {
           return <div key={w.widgetKey} className={styles.widgetEditItem}>
             <div className={styles.widgetEditInfo}><strong>{def.label}</strong>{def.required ? <Badge variant="info">Required</Badge> : w.enabled ? <Badge variant="success">On</Badge> : <Badge>Off</Badge>}</div>
             <div className={styles.widgetEditControls}>
-              <button onClick={() => toggleWidget(w.widgetKey)} disabled={def.required}>{w.enabled ? <EyeOff size={14} /> : <Eye size={14} />}</button>
-              <button onClick={() => moveWidget(i, -1)} disabled={i === 0}><ChevronUp size={14} /></button>
-              <button onClick={() => moveWidget(i, 1)} disabled={i === widgets.length - 1}><ChevronDown size={14} /></button>
+              <button onClick={() => toggleWidget(w.widgetKey)} disabled={def.required} aria-label={w.enabled ? "Hide widget" : "Show widget"}>{w.enabled ? <EyeOff size={14} /> : <Eye size={14} />}</button>
+              <button onClick={() => moveWidget(i, -1)} disabled={i === 0} aria-label="Move up"><ChevronUp size={14} /></button>
+              <button onClick={() => moveWidget(i, 1)} disabled={i === widgets.length - 1} aria-label="Move down"><ChevronDown size={14} /></button>
             </div>
           </div>;
         })}</div>
@@ -119,4 +119,5 @@ export function DashboardPage() {
     </div>
   );
 }
+
 
