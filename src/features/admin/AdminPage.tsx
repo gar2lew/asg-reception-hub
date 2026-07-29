@@ -24,7 +24,7 @@ const quickLinkRepo = new QuickLinkRepository();
 const contactRepo = new ContactRepository();
 const stockRepo = new StockRepository();
 const printingRepo = new PrintingRepository();
-type AdminTab = 'staff' | 'tasks' | 'training' | 'operations';
+type AdminTab = 'staff' | 'tasks' | 'training' | 'templates' | 'operations';
 export function AdminPage() {
   const [, refresh] = useState(0);
   const [tab, setTab] = useState<AdminTab>('staff');
@@ -38,6 +38,7 @@ export function AdminPage() {
     { id: 'staff', label: 'Staff Management' },
     { id: 'tasks', label: 'Task Management' },
     { id: 'training', label: 'Training Management' },
+    { id: 'templates', label: 'Task Templates' },
     { id: 'operations', label: 'Operations' },
   ];
   const resetData = () => {
@@ -84,6 +85,12 @@ export function AdminPage() {
         <Card><CardHeader><CardTitle>Training Items ({allTraining.length})</CardTitle></CardHeader>
           <div className={styles.table}><div className={styles.tableRow + ' ' + styles.tableHeader}><span>Title</span><span>Category</span><span>Duration</span><span>Active</span></div>
           {allTraining.map(t => (<div key={t.id} className={styles.tableRow}><span>{t.title}</span><span><Badge>{t.category}</Badge></span><span>{t.estimatedMinutes} min</span><span>{t.active ? <Badge variant="success">Active</Badge> : <Badge variant="default">Inactive</Badge>}</span></div>))}</div>
+        </Card>
+      )}
+      {tab === 'templates' && (
+        <Card><CardHeader><CardTitle>Task Templates ({allTasks.length})</CardTitle></CardHeader>
+          <div className={styles.table}><div className={styles.tableRow + ' ' + styles.tableHeader}><span>Title</span><span>Recurrence</span><span>Scope</span><span>Priority</span><span>Active</span></div>
+          {allTasks.filter(t => t.scope !== 'personal').map(t => (<div key={t.id} className={styles.tableRow}><span>{t.title}</span><span><Badge>{t.recurrence}</Badge></span><span><Badge>{t.scope}</Badge></span><span><Badge variant={t.priority === 'high' ? 'danger' : 'default'}>{t.priority}</Badge></span><span>{t.active ? <Badge variant="success">Active</Badge> : <Badge>Inactive</Badge>}</span></div>))}</div>
         </Card>
       )}
       {tab === 'operations' && (
