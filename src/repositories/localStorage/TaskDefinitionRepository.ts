@@ -21,6 +21,8 @@ export class TaskDefinitionRepository implements ITaskDefinitionRepository {
       description: data.description,
       category: data.category,
       recurrence: data.recurrence,
+      scope: data.scope ?? 'organisation',
+      completionType: data.completionType ?? 'personal',
       assignedStaffIds: data.assignedStaffIds,
       required: data.required ?? true,
       priority: data.priority ?? 'normal',

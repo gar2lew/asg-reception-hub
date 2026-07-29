@@ -1,7 +1,9 @@
 export type TaskCategory = 'daily' | 'weekly' | 'monthly' | 'one_off' | 'training' | 'stock_check' | 'printing_check';
-export type TaskRecurrence = 'daily' | 'weekly' | 'monthly' | 'one_off';
+export type TaskRecurrence = 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'one_off';
 export type TaskPriority = 'low' | 'normal' | 'high';
+export type TaskScope = 'personal' | 'office' | 'organisation';
 export type TaskInstanceStatus = 'pending' | 'in_progress' | 'completed' | 'skipped';
+export type TaskCompletionType = 'personal' | 'team';
 export interface TaskDefinition {
   id: string;
   title: string;
@@ -15,6 +17,12 @@ export interface TaskDefinition {
   instructions?: string;
   relatedTrainingId?: string;
   externalUrl?: string;
+  scope: TaskScope;
+  ownerUid?: string;
+  office?: string;
+  completionType: TaskCompletionType;
+  archived?: boolean;
+  archivedAt?: string;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -28,6 +36,9 @@ export interface TaskInstance {
   note?: string;
   completedAt?: string;
   completedBy?: string;
+  reopenedAt?: string;
+  reopenedBy?: string;
+  completionNote?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -39,6 +50,10 @@ export interface TaskDefinitionCreate {
   assignedStaffIds: string[];
   required?: boolean;
   priority?: TaskPriority;
+  scope?: TaskScope;
+  ownerUid?: string;
+  office?: string;
+  completionType?: TaskCompletionType;
   dueTime?: string;
   instructions?: string;
   relatedTrainingId?: string;

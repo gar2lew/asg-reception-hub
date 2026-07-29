@@ -11,3 +11,6 @@ export type { QuickLink } from './quicklink';
 export { QUICK_LINK_GROUP_LABELS } from './quicklink';
 export type { Announcement } from './announcement';
 export type { Session } from './session';
+export type { NavItem, NavItemCreate } from './navigation';
+export type { AppSetting } from './setting';
+export type { AuditEvent, AuditAction } from './audit';
