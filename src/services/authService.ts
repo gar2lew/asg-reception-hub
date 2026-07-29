@@ -41,3 +41,5 @@ export function getCurrentStaff(): Staff | undefined {
 export function resetAllData(): void {
   clearAllStorage();
 }
+
+

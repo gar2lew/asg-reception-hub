@@ -11,10 +11,23 @@ export default defineConfig({
       '@': path.resolve(__dirname, 'src'),
     },
   },
+  
   test: {
+    root: ".",
+    
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/test-setup.ts',
     css: { modules: { classNameStrategy: 'non-scoped' } },
   },
 })
+
+
+
+
+
+
+
+
+
+

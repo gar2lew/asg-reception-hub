@@ -13,6 +13,7 @@ import { PrintingRepository } from '../localStorage/PrintingRepository';
 import { QuickLinkRepository } from '../localStorage/QuickLinkRepository';
 import { ContactRepository } from '../localStorage/ContactRepository';
 export function runSeed(): void {
+  console.log('[seed] Starting seed...');
   new StaffRepository().seed(SEED_STAFF);
   new TaskDefinitionRepository().seed(SEED_TASK_DEFINITIONS);
   new TrainingRepository().seed(SEED_TRAINING);
@@ -20,6 +21,8 @@ export function runSeed(): void {
   new PrintingRepository().seed(SEED_PRINTING);
   new QuickLinkRepository().seed(SEED_QUICK_LINKS);
   new ContactRepository().seed(SEED_CONTACTS);
+  const staff = new StaffRepository().getAll();
+  console.log('[seed] Staff count:', staff.length, 'names:', staff.map(s => s.name));
 }
 export {
   SEED_STAFF,
@@ -30,3 +33,4 @@ export {
   SEED_QUICK_LINKS,
   SEED_CONTACTS,
 };
+

@@ -16,4 +16,9 @@
 .warning { font-size: 0.85rem; color: var(--asg-danger); line-height: 1.5; }
 .opsGrid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--asg-space-lg); }
 .opsNote { font-size: 0.85rem; color: var(--asg-muted); padding: 8px 0; }
+.checkLabel { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--asg-text); cursor: pointer; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.fieldLabel { font-size: 0.8125rem; font-weight: 600; color: var(--asg-text-secondary); }
+.textarea { padding: 8px 12px; border: 1px solid var(--asg-border); border-radius: var(--asg-radius-md); background: white; color: var(--asg-text); font-size: 0.9375rem; outline: none; resize: vertical; font-family: var(--asg-font-body); }
+.textarea:focus { border-color: var(--asg-gold-500); box-shadow: 0 0 0 2px var(--asg-gold-100); }
 @media (max-width: 768px) { .tabs { flex-wrap: wrap; } .opsGrid { grid-template-columns: 1fr; } }
