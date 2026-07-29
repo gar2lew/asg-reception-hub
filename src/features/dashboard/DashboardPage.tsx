@@ -1,217 +1,122 @@
-import { useMemo, useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, ExternalLink, BookOpen, Play, Phone, Mail, AlertTriangle } from 'lucide-react';
+import { Settings, ArrowRight, ExternalLink, BookOpen, Play, Phone, Mail, AlertTriangle, Eye, EyeOff, ChevronUp, ChevronDown, Check, X } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '../../components/Card/Card';
 import { Badge } from '../../components/Badge/Badge';
 import { ProgressBar } from '../../components/ProgressBar/ProgressBar';
 import { Button } from '../../components/Button/Button';
+import { WidgetErrorBoundary } from '../../components/WidgetErrorBoundary';
 import { getSession } from '../../services/authService';
-import { TrainingAssignmentRepository } from '../../repositories/localStorage/TrainingAssignmentRepository';
+import { DashboardPreferenceRepository } from '../../repositories/localStorage/DashboardPreferenceRepository';
+import { DASHBOARD_WIDGETS, defaultWidgetConfigs } from '../../models/dashboard';
+import type { WidgetConfig } from '../../models/dashboard';
+import type { TaskInstance } from '../../models';
 import { TaskDefinitionRepository } from '../../repositories/localStorage/TaskDefinitionRepository';
 import { DailyTaskInstanceRepository } from '../../repositories/localStorage/DailyTaskInstanceRepository';
 import { ContactRepository } from '../../repositories/localStorage/ContactRepository';
 import { TrainingRepository } from '../../repositories/localStorage/TrainingRepository';
+import { TrainingAssignmentRepository } from '../../repositories/localStorage/TrainingAssignmentRepository';
 import { StockRepository } from '../../repositories/localStorage/StockRepository';
 import { PrintingRepository } from '../../repositories/localStorage/PrintingRepository';
+import { QuickLinkRepository } from '../../repositories/localStorage/QuickLinkRepository';
 import { generateDailyTasks } from '../../services/taskGenerator';
 import { nowISO } from '../../utils/date';
-import type { TaskInstance } from '../../models';
 import styles from './DashboardPage.module.css';
+
 const taskDefRepo = new TaskDefinitionRepository();
 const instanceRepo = new DailyTaskInstanceRepository();
 const contactRepo = new ContactRepository();
 const trainingRepo = new TrainingRepository();
+const trainingAssignmentRepo = new TrainingAssignmentRepository();
 const stockRepo = new StockRepository();
 const printingRepo = new PrintingRepository();
-const trainingAssignmentRepo = new TrainingAssignmentRepository();
+const quickLinkRepo = new QuickLinkRepository();
+const prefRepo = new DashboardPreferenceRepository();
 export function DashboardPage() {
-  const session = getSession();
-  const navigate = useNavigate();
-  const [, refresh] = useState(0);
-  const forceRefresh = () => refresh(n => n + 1);
+  const session = getSession(); const navigate = useNavigate();
+  const [, refresh] = useState(0); const forceRefresh = () => refresh(n => n + 1);
+  const [editing, setEditing] = useState(false);
+  const [editWidgets, setEditWidgets] = useState<WidgetConfig[] | null>(null);
   useMemo(() => { generateDailyTasks(); }, []);
-  const staffId = session?.staffId || '';
+
+  const staffId = session?.staffId || ''; const role = session?.role || '';
   const todayKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
+  const pref = prefRepo.get(staffId);
+  const widgets = editWidgets ?? pref.widgets;
+
+  // Shared data
   const instances = instanceRepo.getByDateAndStaff(todayKey, staffId);
-  const definitions = taskDefRepo.getAll();
-  const defMap = new Map(definitions.map(d => [d.id, d]));
-  const tasksWithDefs = instances.map(inst => ({ inst, def: defMap.get(inst.taskDefinitionId) })).filter(t => t.def);
-  const completed = tasksWithDefs.filter(t => t.inst.status === 'completed');
-  const total = tasksWithDefs.length;
-  const doneCount = completed.length;
-  const priorityTasks = tasksWithDefs.filter(t => t.def!.priority === 'high' && t.inst.status !== 'completed').slice(0, 5);
-  const overdueTasks = tasksWithDefs.filter(t => t.inst.status === 'pending' && t.def?.dueTime && t.def.dueTime < new Date().toTimeString().slice(0, 5)).slice(0, 3);
+  const defs = new Map(taskDefRepo.getAll().map(d => [d.id, d]));
+  const sharedTasks = instances.map(i => ({ inst: i, def: defs.get(i.taskDefinitionId) })).filter(t => t.def);
+  const doneCount = sharedTasks.filter(t => t.inst.status === 'completed').length;
+  const priorityTasks = sharedTasks.filter(t => t.def!.priority === 'high' && t.inst.status !== 'completed');
+  const contacts = contactRepo.getAll().filter(c => c.category !== 'escalation');
   const lowStock = stockRepo.getAll().filter(s => s.currentQuantity <= s.minimumQuantity);
-  const printingNeeds = printingRepo.getAll().filter(p => {
-    if (!p.lastPrintedDate) return true;
-    const last = new Date(p.lastPrintedDate);
-    const diff = (Date.now() - last.getTime()) / (1000 * 60 * 60 * 24);
-    return diff > p.checkFrequencyDays || p.estimatedQuantity <= p.preferredMinimum;
-  });
-  const contactsList = contactRepo.getAll().filter(c => c.category !== 'escalation');
-  const escalationContacts = contactRepo.getByCategory('escalation');
-  const assignedTraining = trainingRepo.getActive().filter(t => t.assignedStaffIds.includes(staffId));
-  const incompleteTraining = assignedTraining.filter(t => {
-    const assignments = trainingAssignmentRepo.getByStaff(staffId);
-    return !assignments.some(a => a.trainingId === t.id && a.completed);
-  });
-  const updateTaskStatus = (instance: TaskInstance, status: TaskInstance['status']) => {
-    instance.status = status;
-    instance.updatedAt = nowISO();
-    if (status === 'completed') { instance.completedAt = nowISO(); instance.completedBy = staffId; }
-    instanceRepo.upsert(instance);
-    forceRefresh();
-  };
+  const printingAlerts = printingRepo.getAll().filter(p => { if (!p.lastPrintedDate) return true; const d = Date.now() - new Date(p.lastPrintedDate).getTime(); return d / 86400000 > p.checkFrequencyDays || p.estimatedQuantity <= p.preferredMinimum; });
+  const incompleteTraining = trainingRepo.getActive().filter(t => t.assignedStaffIds.includes(staffId)).filter(t => !trainingAssignmentRepo.getByStaff(staffId).some(a => a.trainingId === t.id && a.completed));
+  const qLinks = quickLinkRepo.getAll().filter(l => !l.archived && l.enabled).slice(0, 8);
+
+  // Save/cancel/edit
+  const startEdit = useCallback(() => { setEditWidgets([...pref.widgets]); setEditing(true); }, [pref]);
+  const saveEdit = useCallback(() => { if (editWidgets) { prefRepo.save({ ...pref, widgets: editWidgets }); setEditing(false); forceRefresh(); } }, [editWidgets, pref]);
+  const cancelEdit = useCallback(() => { setEditWidgets(null); setEditing(false); }, []);
+  const resetDefaults = useCallback(() => { const d = defaultWidgetConfigs(); setEditWidgets(d); }, []);
+  const toggleWidget = useCallback((key: string) => { setEditWidgets(prev => prev?.map(w => w.widgetKey === key ? { ...w, enabled: !w.enabled } : w) ?? null); }, []);
+  const moveWidget = useCallback((i: number, dir: number) => { setEditWidgets(prev => { if (!prev) return prev; const a = [...prev]; const t = a[i]; a[i] = a[i + dir]; a[i + dir] = t; return a.map((w, idx) => ({ ...w, order: idx })); }); }, []);
+
+  const visibleWidgets = widgets.filter(w => w.enabled).sort((a: any, b: any) => a.order - b.order);
+
+  function renderWidget(w: WidgetConfig) {
+    const def = DASHBOARD_WIDGETS.find(d => d.key === w.widgetKey);
+    if (!def || (!def.roles.includes(role as any))) return null;
+    return <WidgetErrorBoundary key={w.widgetKey} widgetKey={w.widgetKey} widgetLabel={def.label}>
+      <div className={`${styles.widget} ${styles[w.size]}`}>
+        {w.widgetKey === 'progress' && <><CardHeader><CardTitle>Today&apos;s Progress</CardTitle></CardHeader><ProgressBar value={doneCount} max={sharedTasks.length} label="Progress" /></>}
+        {w.widgetKey === 'priority' && <><CardHeader><CardTitle>Priority Tasks <Badge variant="danger">{priorityTasks.length}</Badge></CardTitle><Button variant="ghost" size="sm" onClick={() => navigate('/tasks')}><ArrowRight size={14} /></Button></CardHeader>
+          {priorityTasks.length === 0 ? <p className={styles.empty}>All clear!</p> : priorityTasks.slice(0, 5).map(t => <div key={t.inst.id} className={styles.taskItem}><span>{t.def!.title}</span><Badge variant="danger">High</Badge></div>)}</>}
+        {w.widgetKey === 'opening' && <><CardHeader><CardTitle>Opening Routine</CardTitle></CardHeader>
+          {sharedTasks.filter(t => t.def!.id.includes('open') && t.inst.status !== 'completed').slice(0, 5).map(t => <div key={t.inst.id} className={styles.taskItem}><span>{t.def!.title}</span></div>)}
+          {sharedTasks.filter(t => t.def!.id.includes('open') && t.inst.status !== 'completed').length === 0 && <p className={styles.empty}>Complete!</p>}</>}
+        {w.widgetKey === 'upcoming' && <><CardHeader><CardTitle>Upcoming {sharedTasks.filter(t => t.inst.status === 'pending').length}</CardTitle></CardHeader>
+          {sharedTasks.filter(t => t.inst.status === 'pending').slice(0, 6).map(t => <div key={t.inst.id} className={styles.taskItem}><span>{t.def!.title}</span></div>)}</>}
+        {w.widgetKey === 'stock' && <><CardHeader><CardTitle>Low Stock <Badge variant="warning">{lowStock.length}</Badge></CardTitle><Button variant="ghost" size="sm" onClick={() => navigate('/stock')}><ArrowRight size={14} /></Button></CardHeader>
+          {lowStock.map(s => <div key={s.id} className={styles.taskItem}><span>{s.name}: {s.currentQuantity} left</span><Badge variant="warning">Low</Badge></div>)}</>}
+        {w.widgetKey === 'printing' && <><CardHeader><CardTitle>Printing <Badge variant="info">{printingAlerts.length}</Badge></CardTitle><Button variant="ghost" size="sm" onClick={() => navigate('/printing')}><ArrowRight size={14} /></Button></CardHeader>
+          {printingAlerts.map(p => <div key={p.id} className={styles.taskItem}><span>{p.name}</span><Badge variant="info">Due</Badge></div>)}</>}
+        {w.widgetKey === 'quicklinks' && <><CardHeader><CardTitle>Quick Links</CardTitle><Button variant="ghost" size="sm" onClick={() => navigate('/quick-links')}><ArrowRight size={14} /></Button></CardHeader>
+          {qLinks.map(l => <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer" className={styles.taskItem}>{l.title}<ExternalLink size={12} /></a>)}</>}
+        {w.widgetKey === 'contacts' && <><CardHeader><CardTitle>Contacts</CardTitle></CardHeader>
+          {contacts.slice(0, 5).map(c => <div key={c.id} className={styles.taskItem}><span>{c.name}</span><span className={styles.meta}>{c.phone}</span></div>)}</>}
+        {w.widgetKey === 'announcements' && <><CardHeader><CardTitle>Announcements</CardTitle></CardHeader><p className={styles.empty}>No announcements</p></>}
+      </div>
+    </WidgetErrorBoundary>;
+  }
+
   return (
     <div className={styles.page}>
-      <div className={styles.overview}>
-        <ProgressBar value={doneCount} max={total} label="Today's Progress" />
+      <div className={styles.headerRow}>
+        <h1 className={styles.pageTitle}>Dashboard</h1>
+        {!editing ? <Button size="sm" variant="secondary" onClick={startEdit}><Settings size={14} /> Edit Layout</Button>
+          : <div className={styles.editActions}><Button size="sm" variant="secondary" onClick={cancelEdit}><X size={14} /> Cancel</Button><Button size="sm" variant="secondary" onClick={resetDefaults}>Reset</Button><Button size="sm" onClick={saveEdit}><Check size={14} /> Save</Button></div>}
       </div>
       <div className={styles.grid}>
-        <div className={styles.colMain}>
-          <Card>
-            <CardHeader>
-              <CardTitle>Priority Tasks</CardTitle>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/tasks')}>View All <ArrowRight size={14} /></Button>
-            </CardHeader>
-            <div className={styles.taskList}>
-              {priorityTasks.length === 0 && <p className={styles.empty}>All priority tasks complete!</p>}
-              {priorityTasks.map(t => (
-                <div key={t.inst.id} className={styles.taskItem}>
-                  <div className={styles.taskInfo}>
-                    <span className={styles.taskTitle}>{t.def!.title}</span>
-                    {t.def!.dueTime && <span className={styles.dueTime}>Due {t.def!.dueTime}</span>}
-                  </div>
-                  <div className={styles.taskActions}>
-                    <button className={styles.actionBtn} onClick={() => updateTaskStatus(t.inst, 'in_progress')} aria-label="Start task"><Play size={14} /></button>
-                    <button className={styles.actionBtn} onClick={() => updateTaskStatus(t.inst, 'completed')} aria-label="Complete task"><Badge variant="success">Done</Badge></button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Opening Routine</CardTitle>
-            </CardHeader>
-            <div className={styles.taskList}>
-              {tasksWithDefs.filter(t => t.def!.id.includes('open') && t.inst.status !== 'completed').slice(0, 5).map(t => (
-                <div key={t.inst.id} className={styles.taskItem}>
-                  <div className={styles.taskInfo}>
-                    <span className={styles.taskTitle}>{t.def!.title}</span>
-                    {t.def!.dueTime && <span className={styles.dueTime}>{t.def!.dueTime}</span>}
-                  </div>
-                  <button className={styles.actionBtn} onClick={() => updateTaskStatus(t.inst, 'completed')} aria-label="Complete">✓</button>
-                </div>
-              ))}
-              {tasksWithDefs.filter(t => t.def!.id.includes('open') && t.inst.status !== 'completed').length === 0 && <p className={styles.empty}>Opening routine complete!</p>}
-            </div>
-          </Card>
-          {overdueTasks.length > 0 && (
-            <Card>
-              <CardHeader><CardTitle>Overdue Tasks <Badge variant="danger">{overdueTasks.length}</Badge></CardTitle></CardHeader>
-              <div className={styles.taskList}>
-                {overdueTasks.map(t => (
-                  <div key={t.inst.id} className={styles.taskItem}>
-                    <div className={styles.taskInfo}>
-                      <AlertTriangle size={14} className={styles.warnIcon} />
-                      <span className={styles.taskTitle}>{t.def!.title}</span>
-                    </div>
-                    <button className={styles.actionBtn} onClick={() => updateTaskStatus(t.inst, 'completed')} aria-label="Complete">✓</button>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
-          {incompleteTraining.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Training Due</CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => navigate('/training')}>View All <ArrowRight size={14} /></Button>
-              </CardHeader>
-              <div className={styles.taskList}>
-                {incompleteTraining.slice(0, 4).map(t => (
-                  <div key={t.id} className={styles.taskItem}>
-                    <BookOpen size={16} className={styles.taskIcon} />
-                    <div className={styles.taskInfo}><span className={styles.taskTitle}>{t.title}</span></div>
-                    <Button variant="ghost" size="sm" onClick={() => navigate(`/training/${t.id}`)}>Open <ExternalLink size={12} /></Button>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
-          {lowStock.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Low Stock Alerts</CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => navigate('/stock')}>View Stock <ArrowRight size={14} /></Button>
-              </CardHeader>
-              <div className={styles.taskList}>
-                {lowStock.map(s => (
-                  <div key={s.id} className={styles.taskItem}>
-                    <span className={styles.taskTitle}>{s.name} — {s.currentQuantity} {s.unit} left</span>
-                    <Badge variant="warning">Low</Badge>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
-          {printingNeeds.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Printing Reminders</CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => navigate('/printing')}>View All <ArrowRight size={14} /></Button>
-              </CardHeader>
-              <div className={styles.taskList}>
-                {printingNeeds.map(p => (
-                  <div key={p.id} className={styles.taskItem}>
-                    <span className={styles.taskTitle}>{p.name}</span>
-                    <Badge variant="info">Check Due</Badge>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
-        </div>
-        <div className={styles.colSide}>
-          <Card>
-            <CardHeader><CardTitle>Need Help?</CardTitle></CardHeader>
-            <div className={styles.helpList}>
-              {contactsList.map(c => (
-                <div key={c.id} className={styles.helpItem}>
-                  <div className={styles.helpName}>{c.name}</div>
-                  <div className={styles.helpRole}>{c.role}</div>
-                  {c.phone && <div className={styles.helpContact}><Phone size={12} /> {c.phone}</div>}
-                  {c.email && <div className={styles.helpContact}><Mail size={12} /> {c.email}</div>}
-                </div>
-              ))}
-            </div>
-          </Card>
-          {escalationContacts.length > 0 && (
-            <Card>
-              <CardHeader><CardTitle>Emergency / Escalation</CardTitle></CardHeader>
-              <div className={styles.helpList}>
-                {escalationContacts.map(c => (
-                  <div key={c.id} className={styles.helpItem}>
-                    <div className={styles.helpName}>{c.name}</div>
-                    <div className={styles.helpRole}>{c.role}</div>
-                    {c.phone && <div className={cn(styles.helpContact, styles.emergency)}><Phone size={12} /> {c.phone}</div>}
-                    {c.notes && <div className={styles.helpNote}>{c.notes}</div>}
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
-          <Card>
-            <CardHeader><CardTitle>When Unsure</CardTitle></CardHeader>
-            <div className={styles.guidance}>
-              <AlertTriangle size={16} />
-              <p><strong>Stop and ask before proceeding.</strong> It is always better to check than to guess. Your supervisor and team are here to support you.</p>
-            </div>
-          </Card>
-        </div>
+        {visibleWidgets.map(w => renderWidget(w))}
       </div>
+      {editing && <Card><CardHeader><CardTitle>Widget Catalogue</CardTitle><p className={styles.meta}>Click to toggle, arrows to reorder</p></CardHeader>
+        <div className={styles.widgetList}>{widgets.map((w: any, i: number) => {
+          const def = DASHBOARD_WIDGETS.find(d => d.key === w.widgetKey);
+          if (!def) return null;
+          return <div key={w.widgetKey} className={styles.widgetEditItem}>
+            <div className={styles.widgetEditInfo}><strong>{def.label}</strong>{def.required ? <Badge variant="info">Required</Badge> : w.enabled ? <Badge variant="success">On</Badge> : <Badge>Off</Badge>}</div>
+            <div className={styles.widgetEditControls}>
+              <button onClick={() => toggleWidget(w.widgetKey)} disabled={def.required}>{w.enabled ? <EyeOff size={14} /> : <Eye size={14} />}</button>
+              <button onClick={() => moveWidget(i, -1)} disabled={i === 0}><ChevronUp size={14} /></button>
+              <button onClick={() => moveWidget(i, 1)} disabled={i === widgets.length - 1}><ChevronDown size={14} /></button>
+            </div>
+          </div>;
+        })}</div>
+      </Card>}
     </div>
   );
 }
-function cn(...classes: (string | false | null | undefined)[]): string { return classes.filter(Boolean).join(' '); }
+

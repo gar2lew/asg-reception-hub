@@ -19,3 +19,6 @@ export type { QuickLinkGroup } from './quickLinkGroup';
 export type { UserLinkPreference } from './userLinkPreference';
 export type { UserTask, UserTaskRecurrence } from './userTask';
 export type { TaskCompletion } from './taskCompletion';
+export type { DashboardPreference, WidgetConfig, DashboardWidgetDefinition } from './dashboard';
+export { DASHBOARD_WIDGETS, defaultWidgetConfigs } from './dashboard';
+
