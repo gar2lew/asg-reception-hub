@@ -14,5 +14,8 @@ export type { Session } from './session';
 export type { NavItem, NavItemCreate } from './navigation';
 export type { AppSetting } from './setting';
 export type { AuditEvent, AuditAction } from './audit';
+export type { LinkScope, LinkOpenBehaviour } from './quicklink';
+export type { QuickLinkGroup } from './quickLinkGroup';
+export type { UserLinkPreference } from './userLinkPreference';
 export type { UserTask, UserTaskRecurrence } from './userTask';
 export type { TaskCompletion } from './taskCompletion';
