@@ -58,12 +58,13 @@ service cloud.firestore {
     // ===== Stock collections =====
     match /stockItems/{document} {
       allow read: if hasActiveProfile();
-      allow create, update: if isAdministrator();
+      allow create, update: if isAdministrator() && request.resource.data.active is bool;
       allow delete: if false;
     }
     match /stockInventory/{document} {
       allow read: if hasActiveProfile();
-      allow create, update: if isAdministrator();
+      // Direct quantity writes denied — use applyStockMovement callable
+      allow create, update: if false;
       allow delete: if false;
     }
     match /stockCategories/{document} {
@@ -78,8 +79,8 @@ service cloud.firestore {
     }
     match /stockMovements/{document} {
       allow read: if hasActiveProfile();
-      allow create: if hasActiveProfile();
-      allow update, delete: if false;
+      // Direct movement writes denied — use applyStockMovement callable
+      allow create, update, delete: if false;
     }
     match /taskDefinitions/{document} {
       allow read: if hasActiveProfile();

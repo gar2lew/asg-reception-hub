@@ -6,3 +6,4 @@
  */
 
 export { operationalLogin } from './operationalLogin';
+export { applyStockMovement } from './applyStockMovement';
