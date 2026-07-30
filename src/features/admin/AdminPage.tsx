@@ -17,6 +17,9 @@ import { simpleHash } from '../../utils/hash';
 import { clearAll } from '../../utils/storage';
 import type { Staff, StaffRole } from '../../models';
 import styles from './AdminPage.module.css';
+import { CategoriesSection } from './CategoriesSection';
+import { SuppliersSection } from './SuppliersSection';
+import { ArchivedStockSection } from './ArchivedStockSection';
 const staffRepo = new StaffRepository();
 const taskDefRepo = new TaskDefinitionRepository();
 const trainingRepo = new TrainingRepository();
@@ -24,7 +27,7 @@ const quickLinkRepo = new QuickLinkRepository();
 const contactRepo = new ContactRepository();
 const stockRepo = new StockRepository();
 const printingRepo = new PrintingRepository();
-type AdminTab = 'staff' | 'tasks' | 'training' | 'templates' | 'operations';
+type AdminTab = 'staff' | 'tasks' | 'training' | 'templates' | 'categories' | 'suppliers' | 'archived-stock' | 'operations';
 export function AdminPage() {
   const [, refresh] = useState(0);
   const [tab, setTab] = useState<AdminTab>('staff');
@@ -39,6 +42,9 @@ export function AdminPage() {
     { id: 'tasks', label: 'Task Management' },
     { id: 'training', label: 'Training Management' },
     { id: 'templates', label: 'Task Templates' },
+    { id: 'categories', label: 'Stock Categories' },
+    { id: 'suppliers', label: 'Suppliers' },
+    { id: 'archived-stock', label: 'Archived Stock' },
     { id: 'operations', label: 'Operations' },
   ];
   const resetData = () => {
@@ -93,6 +99,9 @@ export function AdminPage() {
           {allTasks.filter(t => t.scope !== 'personal').map(t => (<div key={t.id} className={styles.tableRow}><span>{t.title}</span><span><Badge>{t.recurrence}</Badge></span><span><Badge>{t.scope}</Badge></span><span><Badge variant={t.priority === 'high' ? 'danger' : 'default'}>{t.priority}</Badge></span><span>{t.active ? <Badge variant="success">Active</Badge> : <Badge>Inactive</Badge>}</span></div>))}</div>
         </Card>
       )}
+      {tab === 'categories' && (<CategoriesSection />)}
+      {tab === 'suppliers' && (<SuppliersSection />)}
+      {tab === 'archived-stock' && (<ArchivedStockSection />)}
       {tab === 'operations' && (
         <div className={styles.opsGrid}>
           <Card><CardHeader><CardTitle>Quick Links ({quickLinkRepo.getAll().length})</CardTitle></CardHeader><p className={styles.opsNote}>Editable via seed data. Future: in-app editing.</p></Card>
@@ -122,3 +131,4 @@ export function AdminPage() {
     </div>
   );
 }
+

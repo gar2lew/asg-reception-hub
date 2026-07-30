@@ -16,7 +16,9 @@ import { DailyTaskInstanceRepository } from '../../repositories/localStorage/Dai
 import { ContactRepository } from '../../repositories/localStorage/ContactRepository';
 import { TrainingRepository } from '../../repositories/localStorage/TrainingRepository';
 import { TrainingAssignmentRepository } from '../../repositories/localStorage/TrainingAssignmentRepository';
-import { StockRepository } from '../../repositories/localStorage/StockRepository';
+import { StockCatalogueRepository } from '../../repositories/localStorage/StockCatalogueRepository';
+import { StockInventoryRepository } from '../../repositories/localStorage/StockInventoryRepository';
+import { stockStatus } from '../../models';
 import { PrintingRepository } from '../../repositories/localStorage/PrintingRepository';
 import { QuickLinkRepository } from '../../repositories/localStorage/QuickLinkRepository';
 import { generateDailyTasks } from '../../services/taskGenerator';
@@ -28,7 +30,8 @@ const instanceRepo = new DailyTaskInstanceRepository();
 const contactRepo = new ContactRepository();
 const trainingRepo = new TrainingRepository();
 const trainingAssignmentRepo = new TrainingAssignmentRepository();
-const stockRepo = new StockRepository();
+const stockCatRepo = new StockCatalogueRepository();
+const stockInvRepo = new StockInventoryRepository();
 const printingRepo = new PrintingRepository();
 const quickLinkRepo = new QuickLinkRepository();
 const prefRepo = new DashboardPreferenceRepository();
@@ -51,7 +54,9 @@ export function DashboardPage() {
   const doneCount = sharedTasks.filter(t => t.inst.status === 'completed').length;
   const priorityTasks = sharedTasks.filter(t => t.def!.priority === 'high' && t.inst.status !== 'completed');
   const contacts = contactRepo.getAll().filter(c => c.category !== 'escalation');
-  const lowStock = stockRepo.getAll().filter(s => s.currentQuantity <= s.minimumQuantity);
+  const allItems = stockCatRepo.getActive();
+  const allInv = stockInvRepo.getAll();
+  const lowStock = allInv.filter(inv => inv.currentQuantity > 0 && inv.currentQuantity <= inv.minimumQuantity);
   const printingAlerts = printingRepo.getAll().filter(p => { if (!p.lastPrintedDate) return true; const d = Date.now() - new Date(p.lastPrintedDate).getTime(); return d / 86400000 > p.checkFrequencyDays || p.estimatedQuantity <= p.preferredMinimum; });
   const incompleteTraining = trainingRepo.getActive().filter(t => t.assignedStaffIds.includes(staffId)).filter(t => !trainingAssignmentRepo.getByStaff(staffId).some(a => a.trainingId === t.id && a.completed));
   const qLinks = quickLinkRepo.getAll().filter(l => !l.archived && l.enabled).slice(0, 8);
@@ -80,7 +85,7 @@ export function DashboardPage() {
         {w.widgetKey === 'upcoming' && <><CardHeader><CardTitle>Upcoming {sharedTasks.filter(t => t.inst.status === 'pending').length}</CardTitle></CardHeader>
           {sharedTasks.filter(t => t.inst.status === 'pending').slice(0, 6).map(t => <div key={t.inst.id} className={styles.taskItem}><span>{t.def!.title}</span></div>)}</>}
         {w.widgetKey === 'stock' && <><CardHeader><CardTitle>Low Stock <Badge variant="warning">{lowStock.length}</Badge></CardTitle><Button variant="ghost" size="sm" onClick={() => navigate('/stock')}><ArrowRight size={14} /></Button></CardHeader>
-          {lowStock.map(s => <div key={s.id} className={styles.taskItem}><span>{s.name}: {s.currentQuantity} left</span><Badge variant="warning">Low</Badge></div>)}</>}
+          {lowStock.map(inv => { const item = allItems.find(i => i.id === inv.stockItemId); return <div key={inv.id} className={styles.taskItem}><span>{item?.itemName || inv.stockItemId}: {inv.currentQuantity} left ({inv.office})</span><Badge variant="warning">Low</Badge></div>; })}</>}
         {w.widgetKey === 'printing' && <><CardHeader><CardTitle>Printing <Badge variant="info">{printingAlerts.length}</Badge></CardTitle><Button variant="ghost" size="sm" onClick={() => navigate('/printing')}><ArrowRight size={14} /></Button></CardHeader>
           {printingAlerts.map(p => <div key={p.id} className={styles.taskItem}><span>{p.name}</span><Badge variant="info">Due</Badge></div>)}</>}
         {w.widgetKey === 'quicklinks' && <><CardHeader><CardTitle>Quick Links</CardTitle><Button variant="ghost" size="sm" onClick={() => navigate('/quick-links')}><ArrowRight size={14} /></Button></CardHeader>
