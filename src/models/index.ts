@@ -11,6 +11,7 @@ export type { Contact } from './contact';
 export type { QuickLink } from './quicklink';
 export type { StockCategory } from './stockCategory';
 export type { Supplier } from './supplier';
+export type { StockMovement, MovementType } from './stockMovement';
 export { QUICK_LINK_GROUP_LABELS } from './quicklink';
 export type { Announcement } from './announcement';
 export type { Session } from './session';
