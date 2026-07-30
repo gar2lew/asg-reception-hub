@@ -55,6 +55,32 @@ service cloud.firestore {
     }
 
     // ===== Operational collections (tasks, training, etc.) =====
+    // ===== Stock collections =====
+    match /stockItems/{document} {
+      allow read: if hasActiveProfile();
+      allow create, update: if isAdministrator();
+      allow delete: if false;
+    }
+    match /stockInventory/{document} {
+      allow read: if hasActiveProfile();
+      allow create, update: if isAdministrator();
+      allow delete: if false;
+    }
+    match /stockCategories/{document} {
+      allow read: if hasActiveProfile();
+      allow create, update: if isAdministrator();
+      allow delete: if false;
+    }
+    match /suppliers/{document} {
+      allow read: if hasActiveProfile();
+      allow create, update: if isAdministrator();
+      allow delete: if false;
+    }
+    match /stockMovements/{document} {
+      allow read: if hasActiveProfile();
+      allow create: if hasActiveProfile();
+      allow update, delete: if false;
+    }
     match /taskDefinitions/{document} {
       allow read: if hasActiveProfile();
       allow create, update: if isAdministrator();
