@@ -4,7 +4,8 @@ export type {
   TaskCategory, TaskRecurrence, TaskPriority, TaskInstanceStatus
 } from './task';
 export type { Training, TrainingAssignment, TrainingCreate, TrainingCategory } from './training';
-export type { StockCatalogueItem, StockInventory, StockItem, StockOrder, StockUpdate, stockStatus, isLowStock, isOutOfStock } from './stock';
+export type { StockCatalogueItem, StockInventory, StockItem, StockOrder, StockUpdate } from './stock';
+export { stockStatus, isLowStock, isOutOfStock } from './stock';
 export type { PrintResource, PrintRun } from './printing';
 export type { Contact } from './contact';
 export type { QuickLink } from './quicklink';
@@ -23,6 +24,7 @@ export type { UserTask, UserTaskRecurrence } from './userTask';
 export type { TaskCompletion } from './taskCompletion';
 export type { DashboardPreference, WidgetConfig, DashboardWidgetDefinition } from './dashboard';
 export { DASHBOARD_WIDGETS, defaultWidgetConfigs } from './dashboard';
+
 
 
 
