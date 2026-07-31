@@ -20,6 +20,7 @@ import styles from './AdminPage.module.css';
 import { CategoriesSection } from './CategoriesSection';
 import { SuppliersSection } from './SuppliersSection';
 import { ArchivedStockSection } from './ArchivedStockSection';
+import { AdminOrdersSection } from './AdminOrdersSection';
 const staffRepo = new StaffRepository();
 const taskDefRepo = new TaskDefinitionRepository();
 const trainingRepo = new TrainingRepository();
@@ -27,7 +28,7 @@ const quickLinkRepo = new QuickLinkRepository();
 const contactRepo = new ContactRepository();
 const stockRepo = new StockRepository();
 const printingRepo = new PrintingRepository();
-type AdminTab = 'staff' | 'tasks' | 'training' | 'templates' | 'categories' | 'suppliers' | 'archived-stock' | 'operations';
+type AdminTab = 'staff' | 'tasks' | 'training' | 'templates' | 'categories' | 'suppliers' | 'archived-stock' | 'orders' | 'operations';
 export function AdminPage() {
   const [, refresh] = useState(0);
   const [tab, setTab] = useState<AdminTab>('staff');
@@ -45,6 +46,7 @@ export function AdminPage() {
     { id: 'categories', label: 'Stock Categories' },
     { id: 'suppliers', label: 'Suppliers' },
     { id: 'archived-stock', label: 'Archived Stock' },
+    { id: 'orders', label: 'Orders' },
     { id: 'operations', label: 'Operations' },
   ];
   const resetData = () => {
@@ -102,6 +104,7 @@ export function AdminPage() {
       {tab === 'categories' && (<CategoriesSection />)}
       {tab === 'suppliers' && (<SuppliersSection />)}
       {tab === 'archived-stock' && (<ArchivedStockSection />)}
+      {tab === 'orders' && (<AdminOrdersSection />)}
       {tab === 'operations' && (
         <div className={styles.opsGrid}>
           <Card><CardHeader><CardTitle>Quick Links ({quickLinkRepo.getAll().length})</CardTitle></CardHeader><p className={styles.opsNote}>Editable via seed data. Future: in-app editing.</p></Card>
@@ -131,4 +134,5 @@ export function AdminPage() {
     </div>
   );
 }
+
 

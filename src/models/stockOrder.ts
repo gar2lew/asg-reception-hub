@@ -1,4 +1,4 @@
-export type OrderStatus = 'draft' | 'requested' | 'approved' | 'ordered' | 'partially-received' | 'received' | 'cancelled';
+export type OrderStatus = 'draft' | 'requested' | 'approved' | 'rejected' | 'ordered' | 'partially-received' | 'received' | 'cancelled';
 export interface StockOrder {
   id: string;
   office: string;
