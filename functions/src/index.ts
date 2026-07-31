@@ -7,3 +7,4 @@
 
 export { operationalLogin } from './operationalLogin';
 export { applyStockMovement } from './applyStockMovement';
+export { createStockOrderDraft, submitStockOrder, approveStockOrder, rejectStockOrder, markStockOrderOrdered, cancelStockOrder } from './stockOrderOperations';

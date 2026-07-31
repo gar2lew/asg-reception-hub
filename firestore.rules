@@ -78,6 +78,22 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /stockMovements/{document} {
+    // ===== Order collections =====
+    match /stockOrders/{document} {
+      allow read: if hasActiveProfile() && (isAdministrator() || resource.data.office == request.auth.token.office);
+      allow create: if hasActiveProfile();
+      allow update: if false; // use trusted callable
+      allow delete: if false;
+    }
+    match /orderLineItems/{document} {
+      allow read: if hasActiveProfile();
+      allow create: if false; // use trusted callable
+      allow update, delete: if false;
+    }
+    match /stockReceipts/{document} {
+      allow read: if hasActiveProfile();
+      allow create, update, delete: if false; // future phase
+    }
       allow read: if hasActiveProfile();
       // Direct movement writes denied — use applyStockMovement callable
       allow create, update, delete: if false;
