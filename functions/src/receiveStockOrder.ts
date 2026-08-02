@@ -19,65 +19,112 @@ export const receiveStockOrder = https.onCall({ region: 'australia-southeast1', 
     throw new https.HttpsError('invalid-argument', 'Order ID and receipt lines required.');
   }
 
-  const db = getFirestore();
-  const orderSnap = await db.collection('stockOrders').doc(orderId).get();
-  if (!orderSnap.exists) throw new https.HttpsError('not-found', 'Order not found.');
-  const order = orderSnap.data()!;
-  if (order.status !== 'ordered' && order.status !== 'partially-received') {
-    throw new https.HttpsError('failed-precondition', `Cannot receive a ${order.status} order.`);
-  }
-  if (order.office !== office && !isAdmin) {
-    throw new https.HttpsError('permission-denied', 'Office mismatch.');
+  const normalizedReceipts = receipts.map((receipt: any) => ({
+    stockItemId: receipt.stockItemId,
+    quantity: Number(receipt.quantity),
+  }));
+  const seenStockItemIds = new Set<string>();
+  for (const receipt of normalizedReceipts) {
+    if (!receipt.stockItemId || !isFinite(receipt.quantity) || receipt.quantity <= 0) {
+      throw new https.HttpsError('invalid-argument', 'Invalid receipt line.');
+    }
+    if (seenStockItemIds.has(receipt.stockItemId)) {
+      throw new https.HttpsError('invalid-argument', `Duplicate receipt line for ${receipt.stockItemId}.`);
+    }
+    seenStockItemIds.add(receipt.stockItemId);
   }
 
+  const db = getFirestore();
+  const orderRef = db.collection('stockOrders').doc(orderId);
+
   await db.runTransaction(async (tx) => {
-    for (const rc of receipts) {
-      if (!rc.stockItemId || !isFinite(rc.quantity) || rc.quantity <= 0) {
-        throw new https.HttpsError('invalid-argument', 'Invalid receipt line.');
-      }
-      const lineSnap = await db.collection('orderLineItems').where('orderId', '==', orderId).where('stockItemId', '==', rc.stockItemId).limit(1).get();
-      if (lineSnap.empty) throw new https.HttpsError('not-found', `Line item ${rc.stockItemId} not found.`);
-      const line = lineSnap.docs[0];
+    const orderSnap = await tx.get(orderRef);
+    if (!orderSnap.exists) throw new https.HttpsError('not-found', 'Order not found.');
+    const order = orderSnap.data()!;
+    if (order.status !== 'ordered' && order.status !== 'partially-received') {
+      throw new https.HttpsError('failed-precondition', `Cannot receive a ${order.status} order.`);
+    }
+    if (order.office !== office && !isAdmin) {
+      throw new https.HttpsError('permission-denied', 'Office mismatch.');
+    }
+
+    const linesQuery = db.collection('orderLineItems').where('orderId', '==', orderId);
+    const linesSnap = await tx.get(linesQuery);
+    const receiptPlans = [];
+
+    // Firestore requires transaction reads to complete before transaction writes.
+    for (const receipt of normalizedReceipts) {
+      const line = linesSnap.docs.find(lineDoc => lineDoc.data().stockItemId === receipt.stockItemId);
+      if (!line) throw new https.HttpsError('not-found', `Line item ${receipt.stockItemId} not found.`);
       const lineData = line.data();
       const orderedQty = lineData.quantityOrdered ?? lineData.quantityApproved ?? lineData.quantityRequested;
       const remaining = orderedQty - (lineData.quantityReceived || 0);
-      if (rc.quantity > remaining) throw new https.HttpsError('failed-precondition', `Over-receipt rejected for ${lineData.itemName}. Max remaining: ${remaining}`);
+      if (receipt.quantity > remaining) throw new https.HttpsError('failed-precondition', `Over-receipt rejected for ${lineData.itemName}. Max remaining: ${remaining}`);
 
-      // Update line
-      tx.update(line.ref, { quantityReceived: (lineData.quantityReceived || 0) + rc.quantity });
-
-      // Update inventory
-      const invSnap = await db.collection('stockInventory').where('stockItemId', '==', rc.stockItemId).where('office', '==', order.office).limit(1).get();
+      const inventoryQuery = db.collection('stockInventory')
+        .where('stockItemId', '==', receipt.stockItemId)
+        .where('office', '==', order.office)
+        .limit(1);
+      const invSnap = await tx.get(inventoryQuery);
       if (invSnap.empty) throw new https.HttpsError('not-found', `No inventory for item in ${order.office}.`);
       const inv = invSnap.docs[0];
       const prevQty = inv.data().currentQuantity || 0;
-      tx.update(inv.ref, { currentQuantity: prevQty + rc.quantity, updatedAt: Timestamp.now(), updatedBy: actorUid });
 
-      // Create movement
+      receiptPlans.push({
+        receipt,
+        line,
+        lineData,
+        projectedLineQuantity: (lineData.quantityReceived || 0) + receipt.quantity,
+        inv,
+        prevQty,
+      });
+    }
+
+    const projectedQuantities = new Map(
+      receiptPlans.map(plan => [plan.line.id, plan.projectedLineQuantity]),
+    );
+    const allDone = linesSnap.docs.every(line => {
+      const lineData = line.data();
+      const orderedQty = lineData.quantityOrdered ?? lineData.quantityApproved ?? lineData.quantityRequested;
+      const projectedReceived = projectedQuantities.get(line.id) ?? (lineData.quantityReceived || 0);
+      return orderedQty - projectedReceived <= 0;
+    });
+    const anyReceived = linesSnap.docs.some(line => {
+      const projectedReceived = projectedQuantities.get(line.id) ?? (line.data().quantityReceived || 0);
+      return projectedReceived > 0;
+    });
+
+    for (const plan of receiptPlans) {
+      const { receipt, line, inv, prevQty } = plan;
+      tx.update(line.ref, { quantityReceived: plan.projectedLineQuantity });
+      tx.update(inv.ref, { currentQuantity: prevQty + receipt.quantity, updatedAt: Timestamp.now(), updatedBy: actorUid });
+
       const movRef = db.collection('stockMovements').doc();
       tx.set(movRef, {
-        stockItemId: rc.stockItemId, stockInventoryId: inv.id, office: order.office,
-        movementType: 'received-order', quantityChange: rc.quantity, previousQuantity: prevQty,
-        resultingQuantity: prevQty + rc.quantity, reason: `Received from order ${orderId}`,
+        stockItemId: receipt.stockItemId, stockInventoryId: inv.id, office: order.office,
+        movementType: 'received-order', quantityChange: receipt.quantity, previousQuantity: prevQty,
+        resultingQuantity: prevQty + receipt.quantity, reason: `Received from order ${orderId}`,
         relatedOrderId: orderId, notes: notes || null, actorUid, actorDisplayName: actorName,
         createdAt: Timestamp.now(),
       });
     }
 
-    // Update order status
-    const linesSnap = await db.collection('orderLineItems').where('orderId', '==', orderId).get();
-    const allDone = linesSnap.docs.every(l => ((l.data().quantityOrdered ?? l.data().quantityApproved ?? l.data().quantityRequested) - (l.data().quantityReceived || 0)) <= 0);
-    const anyReceived = linesSnap.docs.some(l => (l.data().quantityReceived || 0) > 0);
-    tx.update(db.collection('stockOrders').doc(orderId), {
+    tx.update(orderRef, {
       status: allDone ? 'received' : anyReceived ? 'partially-received' : order.status,
       updatedAt: Timestamp.now(),
     });
 
-    // Create receipt record
     const receiptRef = db.collection('stockReceipts').doc();
     tx.set(receiptRef, {
       orderId, office: order.office, receivedBy: actorUid, receivedAt: Timestamp.now(),
       deliveryReference: deliveryReference || null, notes: notes || null,
+      lines: receiptPlans.map(({ receipt, line, lineData }) => ({
+        orderLineItemId: line.id,
+        stockItemId: receipt.stockItemId,
+        itemName: lineData.itemName,
+        unitLabel: lineData.unitLabel,
+        quantityReceived: receipt.quantity,
+      })),
     });
   });
 
