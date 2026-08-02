@@ -57,7 +57,7 @@ function hiddenPowerShellPrompt(prompt) {
     "[System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)",
     "$sec.Dispose()",
     // Write to file to avoid stdout encoding issues
-    "[System.IO.File]::WriteAllText('" + outFile.replace(/\\/g, "\\\\") + "', $plain, [System.Text.Encoding]::UTF8)"
+    "[System.IO.File]::WriteAllText('" + outFile.replace(/\\/g, "\\\\") + "', $plain, [System.Text.UTF8Encoding]::new($false))"
   ].join("; ");
   writeFileSync(ps1, script, "utf-8");
   try {
