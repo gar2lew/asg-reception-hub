@@ -15,10 +15,15 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     setError('');
     if (!name.trim() || !pin.trim()) { setError('Please enter your name and PIN.'); return; }
     setLoading(true);
-    const result = login(name.trim(), pin.trim());
-    setLoading(false);
-    if (result.success) { onLogin(); return; }
-    setError(result.error || 'Login failed.');
+    try {
+      const result = await login(name.trim(), pin.trim());
+      if (result.success) { onLogin(); return; }
+      setError(result.error || 'Login failed.');
+    } catch {
+      setError('Login failed.');
+    } finally {
+      setLoading(false);
+    }
   }, [name, pin, onLogin]);
   const staffNames = ['Administrator', 'Brisbane Reception', 'Perth Reception'];
   return (

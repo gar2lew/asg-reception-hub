@@ -21,7 +21,15 @@ export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const session = getSession();
   const navigate = useNavigate();
-  const handleLogout = () => { logout(); navigate('/login'); };
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch {
+      // The auth service clears the UI session even if provider sign-out fails.
+    } finally {
+      navigate('/login');
+    }
+  };
   const isAdmin = session?.role === 'admin';
   const userLocation = session?.location;
   const sidebar = (
