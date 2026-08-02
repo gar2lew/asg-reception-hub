@@ -25,7 +25,20 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role == 'reception';
     }
 
-    function isOwnProfile(uid: string) {
+    function canReadOffice(office) {
+      return hasActiveProfile()
+        && (isAdministrator()
+          || get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.office == office);
+    }
+
+    function canReadOrderLine() {
+      return hasActiveProfile()
+        && (isAdministrator()
+          || get(/databases/$(database)/documents/stockOrders/$(resource.data.orderId)).data.office
+            == get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.office);
+    }
+
+    function isOwnProfile(uid) {
       return request.auth.uid == uid;
     }
 
@@ -62,7 +75,7 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /stockInventory/{document} {
-      allow read: if hasActiveProfile();
+      allow read: if canReadOffice(resource.data.office);
       // Direct quantity writes denied — use applyStockMovement callable
       allow create, update: if false;
       allow delete: if false;
@@ -78,24 +91,24 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /stockMovements/{document} {
+      allow read: if canReadOffice(resource.data.office);
+      // Direct movement writes denied — use applyStockMovement callable
+      allow create, update, delete: if false;
+    }
+
     // ===== Order collections =====
     match /stockOrders/{document} {
-      allow read: if hasActiveProfile() && (isAdministrator() || resource.data.office == request.auth.token.office);
-      allow create: if hasActiveProfile();
-      allow update: if false; // use trusted callable
-      allow delete: if false;
+      allow read: if canReadOffice(resource.data.office);
+      // All order writes go through trusted callables.
+      allow create, update, delete: if false;
     }
     match /orderLineItems/{document} {
-      allow read: if hasActiveProfile();
-      allow create: if false; // use trusted callable
-      allow update, delete: if false;
+      // Line items inherit office scope from their parent order.
+      allow read: if canReadOrderLine();
+      allow create, update, delete: if false;
     }
     match /stockReceipts/{document} {
-      allow read: if hasActiveProfile();
-      allow create, update, delete: if false; // future phase
-    }
-      allow read: if hasActiveProfile();
-      // Direct movement writes denied — use applyStockMovement callable
+      allow read: if canReadOffice(resource.data.office);
       allow create, update, delete: if false;
     }
     match /taskDefinitions/{document} {
