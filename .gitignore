@@ -24,7 +24,6 @@ functions/lib/
 # Build output
 tsconfig.tsbuildinfo
 src/**/*.js
-vitest.config.ts
 
 # Bootstrap and local scripts
 scripts/bootstrap.env
