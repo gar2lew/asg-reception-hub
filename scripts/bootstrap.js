@@ -7,8 +7,10 @@
  * (reliable hidden input on Windows). Never echoes, logs, or stores values.
  *
  * Usage:
- *   node scripts/bootstrap.js           # live run
- *   node scripts/bootstrap.js --dry-run # validate only, no writes
+ *   node scripts/bootstrap.js               # live run (create or update)
+ *   node scripts/bootstrap.js --dry-run     # validate only, no writes
+ *   node scripts/bootstrap.js --reset-pins  # update PINs on existing accounts
+ *   node scripts/bootstrap.js --help        # print usage
  *
  * Requirements:
  *   - Firebase project on Blaze plan
@@ -35,8 +37,45 @@ const ACCOUNTS = [
   { accountKey: "perth-reception", displayName: "Perth Reception", role: "reception", office: "perth", email: "perth.reception@receptionhub.internal" },
   { accountKey: "administrator", displayName: "Administrator", role: "administrator", office: "all", email: "administrator@receptionhub.internal" },
 ];
+// Canonical UIDs for existing operational accounts (identifiers, not credentials)
+const RESET_ACCOUNT_UIDS = {
+  "brisbane-reception": "GyEaBMx4vKNZJC70yzxbpa0vcyp1",
+  "perth-reception": "HFSi3JazOPgUQmylgDF9J81ItZT2",
+  "administrator": "ih4hsGpZ8Id3mxXJ2n8A9t11fqe2",
+};
 
 const isDryRun = process.argv.includes("--dry-run");
+const isResetPins = process.argv.includes("--reset-pins");
+const isHelp = process.argv.includes("--help") || process.argv.includes("-h");
+
+function printHelp() {
+  process.stdout.write([
+    "ASG Reception Hub — Bootstrap Operational Accounts",
+    "",
+    "Usage:",
+    "  node scripts/bootstrap.js               Create or update operational accounts",
+    "  node scripts/bootstrap.js --dry-run     Validate only, no Firestore writes",
+    "  node scripts/bootstrap.js --reset-pins  Update PINs for all existing accounts",
+    "  node scripts/bootstrap.js --help        Print this help",
+    "",
+    "Modes:",
+    "  default      Prompts for pepper + 3 PINs, creates or updates accounts.",
+    "               Existing accounts get their PIN hash updated in place.",
+    "  --dry-run    Validates Firebase connection and prints account definitions.",
+    "               No reads beyond a connectivity check, no writes.",
+    "  --reset-pins Targets the three known operational accounts by UID.",
+    "               Prompts for pepper + 3 PINs, validates all, then",
+    "               writes all three hashes atomically via Firestore batch.",
+    "               Fails if any account is missing — all-or-nothing.",
+    "  --help       Prints this help and exits. No Firebase calls.",
+    "",
+    "Requirements:",
+    "  firebase-admin@14, bcrypt installed at project root",
+    "  Application Default Credentials (firebase login or GOOGLE_APPLICATION_CREDENTIALS)",
+    "  Blaze-plan Firebase project: " + PROJECT_ID,
+    "",
+  ].join("\n") + "\n");
+}
 
 /**
  * Prompt for sensitive input via PowerShell Read-Host -AsSecureString.
@@ -100,8 +139,121 @@ async function verifyConnection(auth, db) {
     if (err.code !== 7 && err.code !== "PERMISSION_DENIED") throw err;
   }
 }
+async function resetPins(auth, db) {
+  process.stdout.write("ASG Reception Hub - PIN Reset\n");
+  process.stdout.write("Project: " + PROJECT_ID + "\n");
+  process.stdout.write("Mode: RESET PINS (batch update, all-or-nothing)\n");
+  process.stdout.write("----------------------------------------\n");
+  process.stdout.write("WARNING: This will overwrite PIN hashes for all three operational accounts.\n");
+  process.stdout.write("Type CONFIRM RESET to proceed: ");
+  const { stdin: input, stdout: output } = await import("node:process");
+  const readline = await import("node:readline/promises");
+  const rl = readline.createInterface({ input, output });
+  const answer = await rl.question("");
+  rl.close();
+  if (answer.trim() !== "CONFIRM RESET") {
+    process.stdout.write("Cancelled.\n");
+    process.exit(1);
+  }
+
+  process.stdout.write("\n");
+  const pepper = hiddenPowerShellPrompt("Enter OPERATIONAL_LOGIN_PEPPER (hidden)");
+  if (!pepper) {
+    console.error("Error: pepper must not be empty.");
+    process.exit(1);
+  }
+
+  const accountKeys = ["brisbane-reception", "perth-reception", "administrator"];
+  const displayNames = {
+    "brisbane-reception": "Brisbane Reception",
+    "perth-reception": "Perth Reception",
+    "administrator": "Administrator",
+  };
+
+  // Prompt for all PINs first, validate before any writes
+  const pins = {};
+  for (const key of accountKeys) {
+    const pin = hiddenPowerShellPrompt("PIN for " + displayNames[key] + " (4 digits, hidden)");
+    if (!/^\d{4}$/.test(pin)) {
+      console.error("Error: PIN for " + displayNames[key] + " must be exactly 4 digits.");
+      process.exit(1);
+    }
+    pins[key] = pin;
+  }
+
+  process.stdout.write("[INFO] Verifying all three accounts exist...\n");
+
+  // Verify all accounts exist before writing anything
+  const accountDocs = {};
+  for (const key of accountKeys) {
+    const uid = RESET_ACCOUNT_UIDS[key];
+    try {
+      const snap = await db.collection("operationalAccounts").doc(uid).get();
+      if (!snap.exists) {
+        console.error("Error: account " + displayNames[key] + " (UID " + uid + ") not found in Firestore.");
+        process.exit(1);
+      }
+      accountDocs[key] = snap;
+    } catch (err) {
+      console.error("Error reading account " + displayNames[key] + ": " + err.message);
+      process.exit(1);
+    }
+  }
+
+  // Verify Auth UIDs match
+  for (const key of accountKeys) {
+    const uid = RESET_ACCOUNT_UIDS[key];
+    try {
+      await auth.getUser(uid);
+    } catch (err) {
+      console.error("Error: Auth user " + displayNames[key] + " (UID " + uid + ") not found.");
+      process.exit(1);
+    }
+  }
+
+  process.stdout.write("[INFO] All accounts verified. Computing hashes...\n");
+
+  // Hash all PINs
+  const now = Timestamp.now();
+  const hashes = {};
+  for (const key of accountKeys) {
+    hashes[key] = await bcrypt.hash(pins[key] + pepper, 12);
+  }
+
+  // Batch write — all three must succeed together
+  process.stdout.write("[INFO] Writing batch update...\n");
+  const batch = db.batch();
+  for (const key of accountKeys) {
+    const uid = RESET_ACCOUNT_UIDS[key];
+    batch.update(db.collection("operationalAccounts").doc(uid), {
+      pinHash: hashes[key],
+      failedAttemptCount: 0,
+      lockedUntil: null,
+      updatedAt: now,
+    });
+    batch.update(db.collection("userProfiles").doc(uid), {
+      updatedAt: now,
+    });
+  }
+
+  try {
+    await batch.commit();
+  } catch (err) {
+    console.error("Error: batch write failed: " + err.message);
+    process.exit(1);
+  }
+
+  process.stdout.write("----------------------------------------\n");
+  process.stdout.write("PIN reset complete. All three account hashes updated.\n");
+  process.exit(0);
+}
 
 async function main() {
+  if (isHelp) {
+    printHelp();
+    process.exit(0);
+  }
+
   process.stdout.write("ASG Reception Hub - Account Bootstrap\n");
   process.stdout.write("Project: " + PROJECT_ID + "\n");
   process.stdout.write("Mode: " + (isDryRun ? "DRY RUN (no writes)" : "LIVE") + "\n");
@@ -120,6 +272,11 @@ async function main() {
     : getApp();
   const auth = getAuth(app);
   const db = getFirestore(app);
+
+  if (isResetPins) {
+    await resetPins(auth, db);
+    return;
+  }
 
   if (isDryRun) {
     process.stdout.write("[DRY-RUN] Firebase Admin initialised\n");
