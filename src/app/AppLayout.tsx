@@ -1,105 +1,106 @@
-import { useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, CheckSquare, GraduationCap, Package, Printer, Link2, Users, Settings, LogOut, Menu, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { LayoutDashboard, SquareCheckBig, GraduationCap, Link2, Package, Printer, Users, Shield, LogOut, Menu } from 'lucide-react';
 import { getSession, logout } from '../services/authService';
-import { greeting, todayAustralian } from '../utils/date';
-import { cn } from '../utils/cn';
+import { isAdmin } from '../services/authService';
 import styles from './AppLayout.module.css';
-const navItems = [
+
+const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/tasks', icon: CheckSquare, label: 'Daily Tasks' },
+  { to: '/tasks', icon: SquareCheckBig, label: 'Daily Tasks' },
   { to: '/training', icon: GraduationCap, label: 'Training Centre' },
   { to: '/quick-links', icon: Link2, label: 'Quick Links' },
   { to: '/stock', icon: Package, label: 'Stock' },
   { to: '/printing', icon: Printer, label: 'Printing Register' },
   { to: '/contacts', icon: Users, label: 'Contacts' },
 ];
-const adminItems = [
-  { to: '/admin', icon: Settings, label: 'Admin Area' },
-];
+
 export function AppLayout() {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const session = getSession();
   const navigate = useNavigate();
+  const location = useLocation();
+  const session = getSession();
+  const admin = isAdmin();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => { setMobileMenuOpen(false); }, [location.pathname]);
+
   const handleLogout = async () => {
-    try {
-      await logout();
-    } catch {
-      // The auth service clears the UI session even if provider sign-out fails.
-    } finally {
-      navigate('/login');
-    }
+    await logout();
+    navigate('/login');
   };
-  const isAdmin = session?.role === 'admin';
-  const userLocation = session?.location;
-  const sidebar = (
-    <div className={styles.sidebarInner}>
-      <div className={styles.logo}>
-        <div className={styles.logoMark}>ASG</div>
-        <div className={styles.logoText}>
-          <span className={styles.logoTitle}>ASG Reception</span>
-          <span className={styles.logoSub}>Day-to-Day</span>
-        </div>
-      </div>
-      <nav className={styles.nav}>
-        {navItems.map(item => (
-          <NavLink key={item.to} to={item.to} end={item.to === '/'} className={({ isActive }) => cn(styles.navLink, isActive && styles.navLinkActive)} onClick={() => setMobileOpen(false)}>
-            <item.icon size={18} />
-            <span>{item.label}</span>
-          </NavLink>
-        ))}
-      </nav>
-      {isAdmin && (
-        <>
-          <div className={styles.divider} />
-          <div className={styles.sectionLabel}>Admin</div>
-          <nav className={styles.nav}>
-            {adminItems.map(item => (
-              <NavLink key={item.to} to={item.to} end={item.to === '/admin'} className={({ isActive }) => cn(styles.navLink, isActive && styles.navLinkActive)} onClick={() => setMobileOpen(false)}>
-                <item.icon size={18} />
-                <span>{item.label}</span>
-              </NavLink>
-            ))}
-          </nav>
-        </>
-      )}
-      <div className={styles.sidebarFooter}>
-        <div className={styles.userInfo}>
-          <div className={styles.userAvatar}>{session?.name?.charAt(0) || '?'}</div>
-          <div className={styles.userDetails}>
-            <span className={styles.userName}>{session?.name}</span>
-            <span className={styles.userRole}>{session?.role === 'admin' ? 'Administrator' : userLocation ? `${userLocation} Reception` : 'Receptionist'}</span>
-          </div>
-        </div>
-        <button onClick={handleLogout} className={styles.logoutBtn} aria-label="Sign out">
-          <LogOut size={16} />
-        </button>
-      </div>
-    </div>
-  );
+
+  const userInitial = session?.name?.charAt(0)?.toUpperCase() || 'R';
+  const displayRole = session?.role === 'admin' ? 'Administrator' : `${session?.location || ''} Reception`.trim();
+
   return (
     <div className={styles.layout}>
-      <aside className={styles.sidebar}>{sidebar}</aside>
-      {mobileOpen && (
-        <div className={styles.mobileOverlay}>
-          <div className={styles.mobileSidebar}>
-            <div className={styles.mobileHeader}>
-              <button onClick={() => setMobileOpen(false)} className={styles.mobileClose} aria-label="Close menu"><X size={20} /></button>
+      <aside className={styles.sidebar}>
+        <div className={styles.sidebarInner}>
+          <div className={styles.logo}>
+            <div className={styles.logoMark}>ASG</div>
+            <div className={styles.logoText}>
+              <span className={styles.logoTitle}>ASG Reception</span>
+              <span className={styles.logoSub}>Day-to-Day</span>
             </div>
-            {sidebar}
           </div>
-          <div className={styles.overlayBg} onClick={() => setMobileOpen(false)} />
+          <nav className={styles.nav}>
+            {NAV_ITEMS.map(item => {
+              const isActive = location.pathname === item.to;
+              return (
+                <button
+                  key={item.to}
+                  onClick={() => navigate(item.to)}
+                  className={`${styles.navLink} ${isActive ? styles.navLinkActive : ''}`}
+                  aria-current={isActive ? 'page' : undefined}
+                >
+                  <item.icon size={18} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+            {admin && (
+              <button
+                onClick={() => navigate('/admin')}
+                className={`${styles.navLink} ${location.pathname === '/admin' ? styles.navLinkActive : ''}`}
+                aria-current={location.pathname === '/admin' ? 'page' : undefined}
+              >
+                <Shield size={18} />
+                <span>Admin</span>
+              </button>
+            )}
+          </nav>
+          <div className={styles.sidebarFooter}>
+            <div className={styles.userInfo}>
+              <div className={styles.userAvatar}>{userInitial}</div>
+              <div className={styles.userDetails}>
+                <span className={styles.userName}>{session?.name || 'Reception User'}</span>
+                <span className={styles.userRole}>{displayRole}</span>
+              </div>
+            </div>
+            <button className={styles.logoutBtn} onClick={handleLogout} aria-label="Sign out">
+              <LogOut size={16} />
+              <span>Sign out</span>
+            </button>
+          </div>
         </div>
-      )}
+      </aside>
       <div className={styles.main}>
         <header className={styles.header}>
-          <button onClick={() => setMobileOpen(true)} className={styles.menuBtn} aria-label="Open menu"><Menu size={20} /></button>
           <div className={styles.headerLeft}>
-            <span className={styles.greeting}>{greeting()}, {session?.name?.split(' ')[0]}</span>
-            <span className={styles.date}>{todayAustralian()}</span>
+            <button className={styles.menuBtn} onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label="Open menu">
+              <Menu size={20} />
+            </button>
+            <span className={styles.greeting}>
+              Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {session?.name?.split(' ')[0] || 'Reception'}
+            </span>
+            <span className={styles.date}>
+              {new Date().toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+            </span>
           </div>
           <div className={styles.headerRight}>
-            <button onClick={handleLogout} className={styles.mobileLogoutBtn} aria-label="Sign out"><LogOut size={18} /></button>
+            <button className={styles.mobileLogoutBtn} onClick={handleLogout} aria-label="Sign out">
+              <LogOut size={18} />
+            </button>
           </div>
         </header>
         <main className={styles.content}>
