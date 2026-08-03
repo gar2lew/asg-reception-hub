@@ -1,14 +1,30 @@
 import type { TaskInstance } from '../models';
 import { DailyTaskInstanceRepository } from '../repositories/localStorage/DailyTaskInstanceRepository';
 import { TaskDefinitionRepository } from '../repositories/localStorage/TaskDefinitionRepository';
+import { FirebaseDailyTaskInstanceRepository } from '../repositories/firebase/FirebaseDailyTaskInstanceRepository';
+import { FirebaseTaskDefinitionRepository } from '../repositories/firebase/FirebaseTaskDefinitionRepository';
+import { getProvider } from '../firebase/config';
 import { businessDateKey, nowISO } from '../utils/date';
-const taskRepo = new TaskDefinitionRepository();
-const instanceRepo = new DailyTaskInstanceRepository();
-export function generateDailyTasks(): { generated: number; date: string } {
+
+function getTaskRepos() {
+  if (getProvider() === 'firebase') {
+    return {
+      taskRepo: new FirebaseTaskDefinitionRepository(),
+      instanceRepo: new FirebaseDailyTaskInstanceRepository(),
+    };
+  }
+  return {
+    taskRepo: new TaskDefinitionRepository(),
+    instanceRepo: new DailyTaskInstanceRepository(),
+  };
+}
+
+export async function generateDailyTasks(): Promise<{ generated: number; date: string }> {
+  const { taskRepo, instanceRepo } = getTaskRepos();
   const today = businessDateKey();
-  const lastGen = instanceRepo.getLastGeneratedDate();
+  const lastGen = await instanceRepo.getLastGeneratedDate();
   if (lastGen === today) return { generated: 0, date: today };
-  const activeTasks = taskRepo.getActive();
+  const activeTasks = await taskRepo.getActive();
   const todayDow = new Date().getDay();
   const todayDom = new Date().getDate();
   const instances: TaskInstance[] = [];
@@ -20,7 +36,7 @@ export function generateDailyTasks(): { generated: number; date: string } {
     else if (task.recurrence === 'one_off') shouldGenerate = true;
     if (!shouldGenerate) continue;
     for (const staffId of task.assignedStaffIds) {
-      const existing = instanceRepo.getByDateAndStaff(today, staffId);
+      const existing = await instanceRepo.getByDateAndStaff(today, staffId);
       if (existing.some(e => e.taskDefinitionId === task.id)) continue;
       instances.push({
         id: crypto.randomUUID(),
@@ -33,17 +49,19 @@ export function generateDailyTasks(): { generated: number; date: string } {
       });
     }
   }
-  if (instances.length > 0) instanceRepo.upsertMany(instances);
-  instanceRepo.setLastGeneratedDate(today);
+  if (instances.length > 0) await instanceRepo.upsertMany(instances);
+  await instanceRepo.setLastGeneratedDate(today);
   return { generated: instances.length, date: today };
 }
-export function regenerateDailyTasks(): { generated: number; date: string } {
-  instanceRepo.setLastGeneratedDate(''); // Force regeneration
+export async function regenerateDailyTasks(): Promise<{ generated: number; date: string }> {
+  const { instanceRepo } = getTaskRepos();
+  await instanceRepo.setLastGeneratedDate('');
   return generateDailyTasks();
 }
-export function clearAllTaskData(): void {
-  instanceRepo.setLastGeneratedDate('');
-  const all = instanceRepo.getAll();
+export async function clearAllTaskData(): Promise<void> {
+  const { instanceRepo } = getTaskRepos();
+  await instanceRepo.setLastGeneratedDate('');
+  const all = await instanceRepo.getAll();
   all.forEach(t => {
     if (t.status !== 'pending') {
       t.status = 'pending';

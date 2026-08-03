@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Shield, Plus, Pencil, RefreshCw } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '../../components/Card/Card';
 import { Button } from '../../components/Button/Button';
@@ -8,6 +8,8 @@ import { Modal } from '../../components/Modal/Modal';
 import { Badge } from '../../components/Badge/Badge';
 import { StaffRepository } from '../../repositories/localStorage/StaffRepository';
 import { TaskDefinitionRepository } from '../../repositories/localStorage/TaskDefinitionRepository';
+import { FirebaseTaskDefinitionRepository } from '../../repositories/firebase/FirebaseTaskDefinitionRepository';
+import { getProvider } from '../../firebase/config';
 import { TrainingRepository } from '../../repositories/localStorage/TrainingRepository';
 import { QuickLinkRepository } from '../../repositories/localStorage/QuickLinkRepository';
 import { ContactRepository } from '../../repositories/localStorage/ContactRepository';
@@ -22,7 +24,8 @@ import { SuppliersSection } from './SuppliersSection';
 import { ArchivedStockSection } from './ArchivedStockSection';
 import { AdminOrdersSection } from './AdminOrdersSection';
 const staffRepo = new StaffRepository();
-const taskDefRepo = new TaskDefinitionRepository();
+const isFb = getProvider() === 'firebase';
+const taskDefRepo = isFb ? new FirebaseTaskDefinitionRepository() as any : new TaskDefinitionRepository();
 const trainingRepo = new TrainingRepository();
 const quickLinkRepo = new QuickLinkRepository();
 const contactRepo = new ContactRepository();
@@ -69,7 +72,10 @@ export function AdminPage() {
     setEditingStaff(s.id); setShowStaffModal(true);
   };
   const allStaff = staffRepo.getAll().filter(s => s.active);
-  const allTasks = taskDefRepo.getAll();
+  const [allTasks, setAllTasks] = useState<any[]>([]);
+  useEffect(() => {
+    Promise.resolve(taskDefRepo.getAll()).then(setAllTasks);
+  }, []);
   const allTraining = trainingRepo.getAll();
   return (
     <div className={styles.page}>

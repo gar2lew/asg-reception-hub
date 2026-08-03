@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Play, CheckCircle, SkipForward, ExternalLink, BookOpen, AlertTriangle, FileText, Plus, Archive, RotateCcw, Search, Users, Calendar, Clock } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '../../components/Card/Card';
 import { Badge } from '../../components/Badge/Badge';
@@ -10,13 +10,17 @@ import { getSession } from '../../services/authService';
 import { TaskDefinitionRepository } from '../../repositories/localStorage/TaskDefinitionRepository';
 import { DailyTaskInstanceRepository } from '../../repositories/localStorage/DailyTaskInstanceRepository';
 import { UserTaskRepository } from '../../repositories/localStorage/UserTaskRepository';
+import { FirebaseTaskDefinitionRepository } from '../../repositories/firebase/FirebaseTaskDefinitionRepository';
+import { FirebaseDailyTaskInstanceRepository } from '../../repositories/firebase/FirebaseDailyTaskInstanceRepository';
+import { getProvider } from '../../firebase/config';
 import { generateDailyTasks } from '../../services/taskGenerator';
 import { nowISO, todayISO } from '../../utils/date';
 import type { TaskInstance, UserTask } from '../../models';
 import styles from './TasksPage.module.css';
 
-const taskDefRepo = new TaskDefinitionRepository();
-const instanceRepo = new DailyTaskInstanceRepository();
+const isFirebase = getProvider() === 'firebase';
+const taskDefRepo = isFirebase ? new FirebaseTaskDefinitionRepository() as any : new TaskDefinitionRepository();
+const instanceRepo = isFirebase ? new FirebaseDailyTaskInstanceRepository() as any : new DailyTaskInstanceRepository();
 const userTaskRepo = new UserTaskRepository();
 
 type View = 'today' | 'overdue' | 'upcoming' | 'completed' | 'personal' | 'shared' | 'archived';
@@ -33,12 +37,22 @@ export function TasksPage() {
   const [editTaskId, setEditTaskId] = useState<string | null>(null);
   const [ft, setFt] = useState({ title: '', dueDate: '', dueTime: '', priority: 'normal' as 'low'|'normal'|'high' });
   const forceRefresh = () => refresh(n => n + 1);
-  useMemo(() => { generateDailyTasks(); }, []);
-
+  useEffect(() => { generateDailyTasks().then(forceRefresh); }, []);
+  
   const staffId = session?.staffId || '';
   const todayKey = todayISO().split('T')[0];
-  const instances = instanceRepo.getByDateAndStaff(todayKey, staffId);
-  const definitions = taskDefRepo.getAll();
+  const [instances, setInstances] = useState<TaskInstance[]>([]);
+  const [definitions, setDefinitions] = useState<any[]>([]);
+  useEffect(() => {
+    if (!staffId) return;
+    Promise.all([
+      instanceRepo.getByDateAndStaff(todayKey, staffId),
+      taskDefRepo.getAll(),
+    ]).then(([insts, defs]) => {
+      setInstances(insts);
+      setDefinitions(defs);
+    });
+  }, [staffId, todayKey]);
   const defMap = new Map(definitions.map(d => [d.id, d]));
   const sharedTasks = instances.map(inst => ({ inst, def: defMap.get(inst.taskDefinitionId) })).filter(t => t.def);
   const userTasks = userTaskRepo.getByUser(staffId).filter(t => !t.archived);
@@ -54,10 +68,10 @@ export function TasksPage() {
   const toggleComplete = (t: UserTask) => { userTaskRepo.update(t.id, { completed: !t.completed }); forceRefresh(); };
   const archiveTask = (id: string) => { userTaskRepo.archive(id); forceRefresh(); };
   const restoreTask = (id: string) => { userTaskRepo.restore(id); forceRefresh(); };
-  const setSharedStatus = (inst: TaskInstance, s: TaskInstance['status']) => {
+  const setSharedStatus = async (inst: TaskInstance, s: TaskInstance['status']) => {
     inst.status = s; inst.updatedAt = nowISO();
     if (s === 'completed') { inst.completedAt = nowISO(); inst.completedBy = staffId; }
-    instanceRepo.upsert(inst); forceRefresh();
+    await instanceRepo.upsert(inst); forceRefresh();
   };
   const matches = (title: string) => !search || title.toLowerCase().includes(search.toLowerCase());
 
