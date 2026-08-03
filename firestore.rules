@@ -20,11 +20,6 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role == 'administrator';
     }
 
-    function isReception() {
-      return hasActiveProfile()
-        && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role == 'reception';
-    }
-
     function canReadOffice(office) {
       return hasActiveProfile()
         && (isAdministrator()
