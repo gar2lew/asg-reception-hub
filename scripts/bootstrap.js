@@ -165,18 +165,21 @@ async function main() {
     }
     process.stdout.write("[INFO] Processing " + acct.displayName + "... ");
 
+    let isExisting = false;
+    let uid;
     try {
       const existing = await db.collection("operationalAccounts").where("accountKey", "==", acct.accountKey).limit(1).get();
-      if (!existing.empty) {
-        process.stdout.write("already exists (" + existing.docs[0].id + ")\n");
-        continue;
-      }
-    } catch (err) {
-      process.stdout.write("ERROR checking existing: " + err.message + "\n");
-      continue;
-    }
+     if (!existing.empty) {
+        uid = existing.docs[0].data().uid || existing.docs[0].id;
+        isExisting = true;
+        process.stdout.write("updating existing account (" + existing.docs[0].id + ")\n");
+     }
+   } catch (err) {
+     process.stdout.write("ERROR checking existing: " + err.message + "\n");
+     continue;
+   }
 
-    let uid;
+    if (!isExisting) {
     try {
       const rec = await auth.createUser({
         email: acct.email,
@@ -195,12 +198,13 @@ async function main() {
           continue;
         }
       } else {
-        process.stdout.write("ERROR creating user: " + err.message + "\n");
-        continue;
-      }
-    }
+       process.stdout.write("ERROR creating user: " + err.message + "\n");
+       continue;
+     }
+   }
+   }
 
-    try {
+   try {
       await auth.setCustomUserClaims(uid, {
         accountKey: acct.accountKey,
         role: acct.role,
@@ -214,7 +218,18 @@ async function main() {
     const pepperedHash = await bcrypt.hash(pin + pepper, 12);
     const now = Timestamp.now();
 
-    try {
+  try {
+     if (isExisting) {
+       await db.collection("operationalAccounts").doc(uid).update({
+         pinHash: pepperedHash,
+         failedAttemptCount: 0,
+         lockedUntil: null,
+         updatedAt: now,
+       });
+       await db.collection("userProfiles").doc(uid).update({
+         updatedAt: now,
+       });
+     } else {
       await db.collection("operationalAccounts").doc(uid).set({
         accountKey: acct.accountKey, uid, displayName: acct.displayName,
         role: acct.role, office: acct.office, active: true, pinHash: pepperedHash,
@@ -224,6 +239,7 @@ async function main() {
         uid, accountKey: acct.accountKey, displayName: acct.displayName,
         role: acct.role, office: acct.office, active: true, createdAt: now, updatedAt: now,
       });
+     }
     } catch (err) {
       process.stdout.write("ERROR writing Firestore: " + err.message + "\n");
       continue;

@@ -5,7 +5,7 @@
  * No Admin SDK code exists in the client bundle.
  */
 
-export { operationalLogin } from './operationalLogin';
-export { applyStockMovement } from './applyStockMovement';
-export { createStockOrderDraft, submitStockOrder, approveStockOrder, rejectStockOrder, markStockOrderOrdered, cancelStockOrder } from './stockOrderOperations';
-export { receiveStockOrder } from './receiveStockOrder';
+export { operationalLogin } from './operationalLogin.js';
+export { applyStockMovement } from './applyStockMovement.js';
+export { createStockOrderDraft, submitStockOrder, approveStockOrder, rejectStockOrder, markStockOrderOrdered, cancelStockOrder } from './stockOrderOperations.js';
+export { receiveStockOrder } from './receiveStockOrder.js';
