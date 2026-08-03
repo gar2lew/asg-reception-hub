@@ -6,7 +6,7 @@ import { removeItem } from './utils/storage';
 
 // Force staff seed to ensure login accounts exist
 removeItem('staff');
-runSeed();
+(async () => { await runSeed(); })();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

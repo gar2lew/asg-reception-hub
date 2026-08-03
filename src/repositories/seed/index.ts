@@ -7,14 +7,20 @@ import { SEED_QUICK_LINKS } from './quickLinks';
 import { SEED_CONTACTS } from './contacts';
 import { StaffRepository } from '../localStorage/StaffRepository';
 import { TaskDefinitionRepository } from '../localStorage/TaskDefinitionRepository';
+import { FirebaseTaskDefinitionRepository } from '../firebase/FirebaseTaskDefinitionRepository';
+import { getProvider } from '../../firebase/config';
 import { TrainingRepository } from '../localStorage/TrainingRepository';
 import { StockRepository } from '../localStorage/StockRepository';
 import { PrintingRepository } from '../localStorage/PrintingRepository';
 import { QuickLinkRepository } from '../localStorage/QuickLinkRepository';
 import { ContactRepository } from '../localStorage/ContactRepository';
 import { migrateStockData } from './stockMigration';
-export function runSeed(): void {
+export async function runSeed(): Promise<void> {
   console.log('[seed] Starting seed...');
+  if (getProvider() === 'firebase') {
+    await new FirebaseTaskDefinitionRepository().seed(SEED_TASK_DEFINITIONS);
+    console.log('[seed] Firebase task definitions seeded');
+  }
   new StaffRepository().seed(SEED_STAFF);
   new TaskDefinitionRepository().seed(SEED_TASK_DEFINITIONS);
   new TrainingRepository().seed(SEED_TRAINING);
