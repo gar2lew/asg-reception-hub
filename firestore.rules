@@ -157,6 +157,43 @@ service cloud.firestore {
       allow write: if isAdministrator();
     }
 
+
+    // ===== DRAPS collections =====
+    function isOperationalUser() {
+      return hasActiveProfile()
+        && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role in ['administrator', 'reception'];
+    }
+
+    match /representatives/{document} {
+      allow read: if isOperationalUser();
+      allow create: if isOperationalUser()
+        && request.resource.data.name is string
+        && request.resource.data.office in ['brisbane', 'perth', 'all']
+        && request.resource.data.active == true;
+      allow update: if isOperationalUser();
+      // No hard delete — deactivate via update (active: false)
+      allow delete: if false;
+    }
+
+    match /dailyDrapsReports/{document} {
+      allow read: if isOperationalUser();
+      allow create: if isOperationalUser()
+        && request.resource.data.reportDate is string
+        && request.resource.data.office in ['brisbane', 'perth', 'all']
+        && request.resource.data.status == 'draft';
+      allow update: if isOperationalUser();
+      allow delete: if false;
+    }
+
+    match /dailyRepResults/{document} {
+      allow read: if isOperationalUser();
+      allow create: if isOperationalUser()
+        && request.resource.data.reportId is string
+        && request.resource.data.representativeId is string;
+      allow update: if isOperationalUser();
+      allow delete: if false;
+    }
+
     // ===== Deny everything else =====
     match /{document=**} {
       allow read, write: if false;

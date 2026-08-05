@@ -12,6 +12,7 @@ import { AdminPage } from '../features/admin/AdminPage';
 import { RepresentativesPage } from '../features/representatives/RepresentativesPage';
 import { DrapsPage } from '../features/draps/DrapsPage';
 import { PreviousReportsPage } from '../features/draps/PreviousReportsPage';
+import { DrapsPrintPage } from '../features/draps/DrapsPrintPage';
 import { LoginPage } from '../features/auth/LoginPage';
 import { isAuthenticated } from '../services/authService';
 import type { ReactNode } from 'react';
@@ -38,6 +39,7 @@ export const router = createBrowserRouter([
       { path: 'representatives', element: <RepresentativesPage /> },
       { path: 'draps', element: <DrapsPage /> },
       { path: 'draps/previous', element: <PreviousReportsPage /> },
+      { path: 'draps/print', element: <DrapsPrintPage /> },
     ],
   },
   { path: '/login', element: <LoginPage /> },

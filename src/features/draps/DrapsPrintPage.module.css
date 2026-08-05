@@ -1,0 +1,22 @@
+.page { max-width: 210mm; margin: 0 auto; }
+.report { padding: 12mm; }
+.branding { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.logo { width: 40px; height: 40px; border-radius: 8px; background: linear-gradient(135deg, #c9a84c, #b8942e); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; color: #061a2f; }
+.brandTitle { font-size: 18px; font-weight: 700; color: #061a2f; }
+.reportTitle { font-size: 20px; margin: 0 0 12px; color: #061a2f; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 12px; color: #333; margin-bottom: 20px; }
+.sectionTitle { font-size: 14px; color: #061a2f; border-bottom: 2px solid #c9a84c; padding-bottom: 4px; margin: 20px 0 10px; }
+.dataTable { width: 100%; border-collapse: collapse; font-size: 10px; }
+.dataTable th { background: #f5f0e6; padding: 6px 4px; text-align: center; font-weight: 600; font-size: 9px; text-transform: uppercase; }
+.dataTable td { padding: 5px 4px; text-align: center; border-bottom: 1px solid #eee; }
+.totalRow td { font-weight: 700; background: #faf8f3; border-top: 2px solid #c9a84c; }
+.statusCell { font-size: 8px; color: #666; text-align: left !important; }
+.rates { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; }
+.summary { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; }
+.footer { font-size: 10px; color: #666; margin-top: 12px; }
+@media print {
+  .no-print { display: none !important; }
+  .page { margin: 0; }
+  .report { padding: 0; }
+  @page { size: A4; margin: 15mm; }
+}
