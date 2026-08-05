@@ -27,9 +27,10 @@ export type { UserTask, UserTaskRecurrence } from './userTask';
 export type { TaskCompletion } from './taskCompletion';
 export type { DashboardPreference, WidgetConfig, DashboardWidgetDefinition } from './dashboard';
 export { DASHBOARD_WIDGETS, defaultWidgetConfigs } from './dashboard';
-
-
-
-
-
-
+export type { Representative, RepresentativeCreate } from './representative';
+export type {
+  DailyDrapsReport, DailyRepResult,
+  DailyReportStatus, ResultSectionStatus,
+  DrapsResultSection, FirstConsultResultSection, FinanceRunResultSection,
+} from './draps';
+export { emptyDrapsSection, emptyFirstConsultSection, emptyFinanceRunSection, emptyRepResult } from './draps';
