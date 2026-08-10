@@ -8,30 +8,34 @@ const firebaseMocks = vi.hoisted(() => ({
   } as any,
 }));
 
-vi.mock('firebase-admin/auth', () => ({
-  getAuth: () => ({ getUser: async () => firebaseMocks.user }),
+vi.mock('../src/admin.js', () => ({
+  adminAuth: { getUser: async () => firebaseMocks.user },
+  get adminDb() { return firebaseMocks.db; },
 }));
 
 vi.mock('firebase-admin/firestore', () => ({
-  getFirestore: () => firebaseMocks.db,
   Timestamp: { now: () => 'timestamp-now' },
 }));
 
-vi.mock('firebase-functions', () => {
+vi.mock('firebase-functions/params', () => ({
+  defineSecret: () => ({ value: () => 'test-pepper' }),
+}));
+
+vi.mock('firebase-functions/v2/https', () => {
   class HttpsError extends Error {
     constructor(public code: string, message: string) {
       super(message);
     }
   }
 
-  return {
-    https: {
-      HttpsError,
-      onCall: (_options: unknown, handler: (request: unknown) => unknown) => handler,
-    },
-  };
+ return {
+    HttpsError,
+    onCall: (_options: unknown, handler: (request: unknown) => unknown) => handler,
+ };
 });
 
+import { applyStockMovement } from '../src/applyStockMovement';
+import { operationalLogin } from '../src/operationalLogin';
 import { receiveStockOrder } from '../src/receiveStockOrder';
 
 type DocumentData = Record<string, any>;
@@ -219,6 +223,72 @@ beforeEach(() => {
 });
 
 describe('receiveStockOrder', () => {
+  it('rejects nullable callable data as invalid-argument', async () => {
+    await expect(callReceive(null as any)).rejects.toMatchObject({ code: 'invalid-argument' });
+  });
+
+  it('rejects missing and unsupported role claims', async () => {
+    firebaseMocks.user = { displayName: 'No Role', customClaims: { office: 'brisbane' } };
+    await expect(callReceive({ orderId: 'order-1', receipts: [{ stockItemId: 'item-1', quantity: 1 }] }))
+      .rejects.toMatchObject({ code: 'permission-denied' });
+
+    firebaseMocks.user = { displayName: 'Manager', customClaims: { role: 'manager', office: 'brisbane' } };
+    await expect(callReceive({ orderId: 'order-1', receipts: [{ stockItemId: 'item-1', quantity: 1 }] }))
+      .rejects.toMatchObject({ code: 'permission-denied' });
+  });
+
+  it('rejects an unsupported stored order office even for an administrator', async () => {
+    firebaseMocks.user = { displayName: 'Global Administrator', customClaims: { role: 'administrator' } };
+    firebaseMocks.db = createFirestore({ office: 'sydney' });
+
+    await expect(callReceive({ orderId: 'order-1', receipts: [{ stockItemId: 'item-1', quantity: 1 }] }))
+      .rejects.toMatchObject({ code: 'failed-precondition' });
+  });
+
+  it('rejects a receptionist whose office claim is missing', async () => {
+    firebaseMocks.user = {
+      displayName: 'Unassigned Receptionist',
+      customClaims: { role: 'reception' },
+    };
+
+    await expect(callReceive({
+      orderId: 'order-1',
+      receipts: [{ stockItemId: 'item-1', quantity: 1 }],
+    })).rejects.toMatchObject({ code: 'permission-denied' });
+
+    expect(firebaseMocks.db.transactionReads).toEqual([]);
+  });
+
+  it('rejects a receptionist whose office claim is invalid even when it matches the order', async () => {
+    firebaseMocks.user = {
+      displayName: 'Invalid Office Receptionist',
+      customClaims: { role: 'reception', office: 'sydney' },
+    };
+    firebaseMocks.db = createFirestore({ office: 'sydney' });
+
+    await expect(callReceive({
+      orderId: 'order-1',
+      receipts: [{ stockItemId: 'item-1', quantity: 1 }],
+    })).rejects.toMatchObject({ code: 'permission-denied' });
+
+    expect(firebaseMocks.db.transactionReads).toEqual([]);
+  });
+
+  it('allows an administrator without an office claim to receive for another office', async () => {
+    firebaseMocks.user = {
+      displayName: 'Global Administrator',
+      customClaims: { role: 'administrator' },
+    };
+    firebaseMocks.db = createFirestore({ office: 'perth' });
+
+    await expect(callReceive({
+      orderId: 'order-1',
+      receipts: [{ stockItemId: 'item-1', quantity: 1 }],
+    })).resolves.toEqual({ success: true });
+
+    expect(firebaseMocks.db.data('stockInventory', 'inventory-1')?.currentQuantity).toBe(6);
+  });
+
   it('reads every mutable order, line, and inventory document through the transaction', async () => {
     await callReceive({ orderId: 'order-1', receipts: [{ stockItemId: 'item-1', quantity: 2 }] });
 
@@ -301,12 +371,24 @@ describe('receiveStockOrder', () => {
     await expect(callReceive({
       orderId: 'order-1',
       receipts: [{ stockItemId: 'item-1', quantity: 1 }],
-    })).rejects.toMatchObject({ code: 'permission-denied' });
+    })).rejects.toMatchObject({ code: 'failed-precondition' });
 
     firebaseMocks.db = createFirestore({ quantityOrdered: 10, quantityReceived: 8 });
     await expect(callReceive({
       orderId: 'order-1',
       receipts: [{ stockItemId: 'item-1', quantity: 3 }],
     })).rejects.toMatchObject({ code: 'failed-precondition' });
+  });
+});
+
+describe('v2 callable request wiring', () => {
+  it('invokes applyStockMovement with the v2 request object', async () => {
+    await expect((applyStockMovement as any)({ auth: null, data: {} }))
+      .rejects.toMatchObject({ code: 'unauthenticated' });
+  });
+
+  it('invokes operationalLogin with the v2 request data', async () => {
+    await expect((operationalLogin as any)({ data: { accountKey: 42, pin: null } }))
+      .rejects.toMatchObject({ code: 'invalid-argument' });
   });
 });

@@ -1,19 +1,30 @@
-import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { adminAuth, adminDb } from './admin.js';
 import { Timestamp } from 'firebase-admin/firestore';
-import { https } from 'firebase-functions';
+import * as https from 'firebase-functions/v2/https';
+
+const VALID_OFFICES = new Set(['brisbane', 'perth']);
+const VALID_ROLES = new Set(['administrator', 'reception']);
 
 export const receiveStockOrder = https.onCall({ region: 'australia-southeast1', minInstances: 0, maxInstances: 5, timeoutSeconds: 30, memory: '256MiB' }, async (request) => {
   if (!request.auth) throw new https.HttpsError('unauthenticated', 'Authentication required.');
-  const auth = getAuth();
+  const auth = adminAuth;
   const user = await auth.getUser(request.auth.uid);
   const claims = user.customClaims || {};
   const actorUid = request.auth.uid;
   const actorName = user.displayName || claims.accountKey || 'Unknown';
-  const role = claims.role || 'reception';
+  const role = typeof claims.role === 'string' ? claims.role : undefined;
+  if (!role || !VALID_ROLES.has(role)) {
+    throw new https.HttpsError('permission-denied', 'A valid role claim is required.');
+  }
   const isAdmin = role === 'administrator';
-  const office = claims.office || 'brisbane';
+  const office = typeof claims.office === 'string' ? claims.office : undefined;
+  if (!isAdmin && (!office || !VALID_OFFICES.has(office))) {
+    throw new https.HttpsError('permission-denied', 'A valid office claim is required.');
+  }
 
+  if (!request.data || typeof request.data !== 'object' || Array.isArray(request.data)) {
+    throw new https.HttpsError('invalid-argument', 'Invalid request data.');
+  }
   const { orderId, receipts, deliveryReference, notes } = request.data as any;
   if (!orderId || !receipts || !Array.isArray(receipts) || receipts.length === 0) {
     throw new https.HttpsError('invalid-argument', 'Order ID and receipt lines required.');
@@ -34,13 +45,16 @@ export const receiveStockOrder = https.onCall({ region: 'australia-southeast1', 
     seenStockItemIds.add(receipt.stockItemId);
   }
 
-  const db = getFirestore();
+  const db = adminDb;
   const orderRef = db.collection('stockOrders').doc(orderId);
 
   await db.runTransaction(async (tx) => {
     const orderSnap = await tx.get(orderRef);
     if (!orderSnap.exists) throw new https.HttpsError('not-found', 'Order not found.');
     const order = orderSnap.data()!;
+    if (!VALID_OFFICES.has(order.office)) {
+      throw new https.HttpsError('failed-precondition', 'Order has an invalid office.');
+    }
     if (order.status !== 'ordered' && order.status !== 'partially-received') {
       throw new https.HttpsError('failed-precondition', `Cannot receive a ${order.status} order.`);
     }

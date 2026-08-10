@@ -1,7 +1,6 @@
-import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { adminAuth, adminDb } from './admin.js';
 import { Timestamp } from 'firebase-admin/firestore';
-import { https } from 'firebase-functions';
+import * as https from 'firebase-functions/v2/https';
 
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   draft: ['requested', 'cancelled'],
@@ -11,17 +10,29 @@ const ALLOWED_TRANSITIONS: Record<string, string[]> = {
 };
 
 const VALID_OFFICES = new Set(['brisbane', 'perth']);
+const VALID_ROLES = new Set(['administrator', 'reception']);
+
+function requireData(request: any) {
+  if (!request.data || typeof request.data !== 'object' || Array.isArray(request.data)) {
+    throw new https.HttpsError('invalid-argument', 'Invalid request data.');
+  }
+  return request.data;
+}
 
 async function getActor(request: any) {
   if (!request.auth) throw new https.HttpsError('unauthenticated', 'Authentication required.');
-  const auth = getAuth();
+  const auth = adminAuth;
   const user = await auth.getUser(request.auth.uid);
   const claims = user.customClaims || {};
+  const role = typeof claims.role === 'string' ? claims.role : undefined;
+  if (!role || !VALID_ROLES.has(role)) {
+    throw new https.HttpsError('permission-denied', 'A valid role claim is required.');
+  }
   return {
     uid: request.auth.uid,
     name: user.displayName || claims.accountKey || 'Unknown',
-    role: claims.role || 'reception',
-    isAdmin: claims.role === 'administrator',
+    role,
+    isAdmin: role === 'administrator',
     office: typeof claims.office === 'string' ? claims.office : undefined,
   };
 }
@@ -42,8 +53,9 @@ function checkTransition(current: string, next: string) {
 
 export const createStockOrderDraft = https.onCall({ region: 'australia-southeast1' }, async (request) => {
   const actor = await getActor(request);
+  requireData(request);
   const office = requireOffice(actor);
-  const db = getFirestore();
+  const db = adminDb;
   const ref = await db.collection('stockOrders').add({
     office, requestedBy: actor.uid, status: 'draft',
     createdAt: Timestamp.now(), updatedAt: Timestamp.now(), requestedAt: Timestamp.now(),
@@ -53,7 +65,7 @@ export const createStockOrderDraft = https.onCall({ region: 'australia-southeast
 
 export const submitStockOrder = https.onCall({ region: 'australia-southeast1' }, async (request) => {
   const actor = await getActor(request);
-  const { orderId, supplierId, lines, notes } = request.data;
+  const { orderId, supplierId, lines, notes } = requireData(request);
   if (!orderId || !lines || !Array.isArray(lines) || lines.length === 0) throw new https.HttpsError('invalid-argument', 'Order ID and at least one line required.');
   const stockItemIds = new Set<string>();
   for (const line of lines) {
@@ -64,7 +76,7 @@ export const submitStockOrder = https.onCall({ region: 'australia-southeast1' },
     stockItemIds.add(line.stockItemId);
   }
 
-  const db = getFirestore();
+  const db = adminDb;
   const orderRef = db.collection('stockOrders').doc(orderId);
   const existingLinesQuery = db.collection('orderLineItems').where('orderId', '==', orderId);
   await db.runTransaction(async (tx) => {
@@ -116,11 +128,11 @@ export const submitStockOrder = https.onCall({ region: 'australia-southeast1' },
 
 export const approveStockOrder = https.onCall({ region: 'australia-southeast1' }, async (request) => {
   const actor = await getActor(request);
+  const { orderId, lineApprovals, reason } = requireData(request);
   if (!actor.isAdmin) throw new https.HttpsError('permission-denied', 'Administrator access required.');
-  const { orderId, lineApprovals, reason } = request.data;
   if (!orderId) throw new https.HttpsError('invalid-argument', 'Order ID required.');
   if (!reason?.trim()) throw new https.HttpsError('invalid-argument', 'Approval reason required.');
-  const db = getFirestore();
+  const db = adminDb;
   const orderRef = db.collection('stockOrders').doc(orderId);
   const linesQuery = db.collection('orderLineItems').where('orderId', '==', orderId);
   await db.runTransaction(async (tx) => {
@@ -150,10 +162,10 @@ export const approveStockOrder = https.onCall({ region: 'australia-southeast1' }
 
 export const rejectStockOrder = https.onCall({ region: 'australia-southeast1' }, async (request) => {
   const actor = await getActor(request);
+  const { orderId, reason } = requireData(request);
   if (!actor.isAdmin) throw new https.HttpsError('permission-denied', 'Administrator access required.');
-  const { orderId, reason } = request.data;
   if (!orderId || !reason?.trim()) throw new https.HttpsError('invalid-argument', 'Order ID and reason required.');
-  const db = getFirestore();
+  const db = adminDb;
   const orderRef = db.collection('stockOrders').doc(orderId);
   await db.runTransaction(async (tx) => {
     const orderSnap = await tx.get(orderRef);
@@ -166,10 +178,10 @@ export const rejectStockOrder = https.onCall({ region: 'australia-southeast1' },
 
 export const markStockOrderOrdered = https.onCall({ region: 'australia-southeast1' }, async (request) => {
   const actor = await getActor(request);
+  const { orderId, supplierReference, expectedDeliveryDate, notes } = requireData(request);
   if (!actor.isAdmin) throw new https.HttpsError('permission-denied', 'Administrator access required.');
-  const { orderId, supplierReference, expectedDeliveryDate, notes } = request.data;
   if (!orderId) throw new https.HttpsError('invalid-argument', 'Order ID required.');
-  const db = getFirestore();
+  const db = adminDb;
   const orderRef = db.collection('stockOrders').doc(orderId);
   const linesQuery = db.collection('orderLineItems').where('orderId', '==', orderId);
   await db.runTransaction(async (tx) => {
@@ -202,9 +214,9 @@ export const markStockOrderOrdered = https.onCall({ region: 'australia-southeast
 
 export const cancelStockOrder = https.onCall({ region: 'australia-southeast1' }, async (request) => {
   const actor = await getActor(request);
-  const { orderId, reason } = request.data;
+  const { orderId, reason } = requireData(request);
   if (!orderId) throw new https.HttpsError('invalid-argument', 'Order ID required.');
-  const db = getFirestore();
+  const db = adminDb;
   const orderRef = db.collection('stockOrders').doc(orderId);
   await db.runTransaction(async (tx) => {
     const orderSnap = await tx.get(orderRef);

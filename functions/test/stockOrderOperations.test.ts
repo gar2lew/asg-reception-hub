@@ -2,34 +2,57 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const firebaseMocks = vi.hoisted(() => ({
   db: undefined as any,
+  pinValid: false,
+  tokenClaims: undefined as any,
   user: {
     displayName: 'Real Administrator',
     customClaims: { role: 'administrator', office: 'brisbane' },
   } as any,
 }));
 
-vi.mock('firebase-admin/auth', () => ({
-  getAuth: () => ({ getUser: async () => firebaseMocks.user }),
+vi.mock('../src/admin.js', () => ({
+  adminAuth: {
+    getUser: async () => firebaseMocks.user,
+    createCustomToken: async (_uid: string, claims: unknown) => {
+      firebaseMocks.tokenClaims = claims;
+      return 'custom-token';
+    },
+  },
+  get adminDb() { return firebaseMocks.db; },
 }));
 
-vi.mock('firebase-admin/firestore', () => ({
-  getFirestore: () => firebaseMocks.db,
-  Timestamp: { now: () => 'timestamp-now' },
+vi.mock('firebase-admin/firestore', () => {
+  class MockTimestamp {
+    constructor(readonly milliseconds: number) {}
+    toMillis() { return this.milliseconds; }
+  }
+  return {
+    Timestamp: {
+      now: () => new MockTimestamp(1_000),
+      fromMillis: (value: number) => new MockTimestamp(value),
+    },
+  };
+});
+
+vi.mock('firebase-functions/params', () => ({
+  defineSecret: () => ({ value: () => 'test-pepper' }),
 }));
 
-vi.mock('firebase-functions', () => {
+vi.mock('bcrypt', () => ({
+  compare: async () => firebaseMocks.pinValid,
+}));
+
+vi.mock('firebase-functions/v2/https', () => {
   class HttpsError extends Error {
     constructor(public code: string, message: string) {
       super(message);
     }
   }
 
-  return {
-    https: {
-      HttpsError,
-      onCall: (_options: unknown, handler: (request: unknown) => unknown) => handler,
-    },
-  };
+ return {
+    HttpsError,
+    onCall: (_options: unknown, handler: (request: unknown) => unknown) => handler,
+ };
 });
 
 import {
@@ -40,6 +63,8 @@ import {
   rejectStockOrder,
   submitStockOrder,
 } from '../src/stockOrderOperations';
+import { applyStockMovement } from '../src/applyStockMovement';
+import { operationalLogin } from '../src/operationalLogin';
 
 type DocumentData = Record<string, any>;
 
@@ -223,6 +248,29 @@ function createSubmitFirestore(status = 'draft', requestedBy = 'real-user') {
   });
 }
 
+function createMovementFirestore(office = 'brisbane', currentQuantity = 5) {
+  return new FakeFirestore({
+    stockItems: {
+      'item-1': { itemName: 'Paper', active: true },
+    },
+    stockInventory: {
+      'inventory-1': { stockItemId: 'item-1', office, currentQuantity },
+    },
+  });
+}
+
+function createLoginFirestore(options: { role?: string; office?: string; failedAttemptCount?: number } = {}) {
+  return new FakeFirestore({
+    operationalAccounts: {
+      'account-1': {
+        accountKey: 'brisbane-reception', uid: 'account-user', displayName: 'Reception',
+        role: options.role ?? 'reception', office: options.office ?? 'brisbane', active: true,
+        pinHash: 'hash', failedAttemptCount: options.failedAttemptCount ?? 0, lockedUntil: null,
+      },
+    },
+  });
+}
+
 function useReceptionist(office?: unknown) {
   firebaseMocks.user = {
     displayName: 'Real Receptionist',
@@ -240,9 +288,30 @@ beforeEach(() => {
     displayName: 'Real Administrator',
     customClaims: { role: 'administrator', office: 'brisbane' },
   };
+  firebaseMocks.pinValid = false;
+  firebaseMocks.tokenClaims = undefined;
 });
 
 describe('stock order lifecycle callables', () => {
+  it.each([
+    ['createStockOrderDraft', createStockOrderDraft],
+    ['submitStockOrder', submitStockOrder],
+    ['approveStockOrder', approveStockOrder],
+    ['rejectStockOrder', rejectStockOrder],
+    ['markStockOrderOrdered', markStockOrderOrdered],
+    ['cancelStockOrder', cancelStockOrder],
+  ])('rejects nullable data for %s', async (_name, handler) => {
+    await expect(call(handler, null as any)).rejects.toMatchObject({ code: 'invalid-argument' });
+  });
+
+  it('rejects missing and unsupported authenticated role claims', async () => {
+    firebaseMocks.user = { displayName: 'No Role', customClaims: { office: 'brisbane' } };
+    await expect(call(createStockOrderDraft, {})).rejects.toMatchObject({ code: 'permission-denied' });
+
+    firebaseMocks.user = { displayName: 'Manager', customClaims: { role: 'manager', office: 'brisbane' } };
+    await expect(call(createStockOrderDraft, {})).rejects.toMatchObject({ code: 'permission-denied' });
+  });
+
   it('marks an order ordered and snapshots every line quantity in the same transaction', async () => {
     await call(markStockOrderOrdered, {
       orderId: 'order-1',
@@ -433,5 +502,88 @@ describe('stock order lifecycle callables', () => {
     firebaseMocks.db = createSubmitFirestore('draft', 'another-user');
     await expect(call(cancelStockOrder, { orderId: 'order-1' }, { uid: 'real-user' }))
       .rejects.toMatchObject({ code: 'permission-denied' });
+  });
+});
+
+describe('applyStockMovement security and concurrency', () => {
+  const movement = { stockItemId: 'item-1', stockInventoryId: 'inventory-1', movementType: 'manual-adjustment', quantity: 2, reason: 'Count correction' };
+
+  it('rejects nullable callable data as invalid-argument', async () => {
+    await expect(call(applyStockMovement, null as any, { uid: 'real-user' }))
+      .rejects.toMatchObject({ code: 'invalid-argument' });
+  });
+
+  it('rejects reception cross-office movements and invalid roles', async () => {
+    firebaseMocks.db = createMovementFirestore('perth');
+    useReceptionist('brisbane');
+    await expect(call(applyStockMovement, movement, { uid: 'real-user' }))
+      .rejects.toMatchObject({ code: 'permission-denied' });
+
+    firebaseMocks.db = createMovementFirestore('brisbane');
+    firebaseMocks.user.customClaims = { role: 'manager', office: 'brisbane' };
+    await expect(call(applyStockMovement, movement, { uid: 'real-user' }))
+      .rejects.toMatchObject({ code: 'permission-denied' });
+  });
+
+  it('uses the transactional inventory quantity after a concurrent change', async () => {
+    firebaseMocks.db = createMovementFirestore('brisbane', 5);
+    useReceptionist('brisbane');
+    firebaseMocks.db.mutateBeforeNextWrite(() => {
+      firebaseMocks.db.update(firebaseMocks.db.collection('stockInventory').doc('inventory-1'), { currentQuantity: 8 });
+    });
+
+    await expect(call(applyStockMovement, movement, { uid: 'real-user' }))
+      .resolves.toMatchObject({ resultingQuantity: 10 });
+    expect(firebaseMocks.db.data('stockInventory', 'inventory-1')?.currentQuantity).toBe(10);
+    expect(firebaseMocks.db.transactionReads).toContain('stockInventory/inventory-1');
+  });
+
+  it('allows an administrator without an office claim to move stock in a permitted office', async () => {
+    firebaseMocks.db = createMovementFirestore('perth');
+    firebaseMocks.user = { displayName: 'Global Admin', customClaims: { role: 'administrator' } };
+    await expect(call(applyStockMovement, movement, { uid: 'real-admin' }))
+      .resolves.toMatchObject({ resultingQuantity: 7 });
+  });
+});
+
+describe('operationalLogin validation and concurrency', () => {
+  it('rejects nullable callable data as invalid-argument', async () => {
+    await expect(call(operationalLogin, null as any, null))
+      .rejects.toMatchObject({ code: 'invalid-argument' });
+  });
+
+  it('does not mint a token for an invalid account role and office combination', async () => {
+    firebaseMocks.db = createLoginFirestore({ role: 'administrator', office: 'brisbane' });
+    firebaseMocks.pinValid = true;
+
+    await expect(call(operationalLogin, { accountKey: 'brisbane-reception', pin: '1234' }, null))
+      .rejects.toMatchObject({ code: 'failed-precondition' });
+    expect(firebaseMocks.tokenClaims).toBeUndefined();
+  });
+
+  it('increments from the current transactional failure count', async () => {
+    firebaseMocks.db = createLoginFirestore({ failedAttemptCount: 1 });
+    firebaseMocks.db.mutateBeforeNextWrite(() => {
+      firebaseMocks.db.update(firebaseMocks.db.collection('operationalAccounts').doc('account-1'), { failedAttemptCount: 3 });
+    });
+
+    await expect(call(operationalLogin, { accountKey: 'brisbane-reception', pin: '9999' }, null))
+      .rejects.toMatchObject({ code: 'unauthenticated' });
+    expect(firebaseMocks.db.data('operationalAccounts', 'account-1')?.failedAttemptCount).toBe(4);
+    expect(firebaseMocks.db.transactionReads).toContain('operationalAccounts/account-1');
+  });
+
+  it('rejects a verified PIN when credential or identity fields change before token issuance', async () => {
+    firebaseMocks.db = createLoginFirestore();
+    firebaseMocks.pinValid = true;
+    firebaseMocks.db.mutateBeforeNextWrite(() => {
+      firebaseMocks.db.update(firebaseMocks.db.collection('operationalAccounts').doc('account-1'), {
+        pinHash: 'replacement-hash', role: 'administrator', office: 'all',
+      });
+    });
+
+    await expect(call(operationalLogin, { accountKey: 'brisbane-reception', pin: '1234' }, null))
+      .rejects.toMatchObject({ code: 'unauthenticated' });
+    expect(firebaseMocks.tokenClaims).toBeUndefined();
   });
 });
