@@ -2,7 +2,8 @@
   "indexes": [
     {"collectionGroup": "stockMovements", "queryScope": "COLLECTION", "fields": [{"fieldPath": "stockItemId", "order": "ASCENDING"}, {"fieldPath": "createdAt", "order": "DESCENDING"}]},
     {"collectionGroup": "stockMovements", "queryScope": "COLLECTION", "fields": [{"fieldPath": "stockInventoryId", "order": "ASCENDING"}, {"fieldPath": "createdAt", "order": "DESCENDING"}]},
-   {"collectionGroup": "stockMovements", "queryScope": "COLLECTION", "fields": [{"fieldPath": "office", "order": "ASCENDING"}, {"fieldPath": "createdAt", "order": "DESCENDING"}]}
+    {"collectionGroup": "stockMovements", "queryScope": "COLLECTION", "fields": [{"fieldPath": "office", "order": "ASCENDING"}, {"fieldPath": "createdAt", "order": "DESCENDING"}]},
+    {"collectionGroup": "stockOrders", "queryScope": "COLLECTION", "fields": [{"fieldPath": "office", "order": "ASCENDING"}, {"fieldPath": "createdAt", "order": "DESCENDING"}]}
   ],
   "fieldOverrides": []
 }

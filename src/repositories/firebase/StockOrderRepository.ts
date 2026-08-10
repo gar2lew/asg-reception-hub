@@ -42,8 +42,18 @@ export class FirebaseOrderLineItemRepository {
 }
 
 export class FirebaseStockReceiptRepository {
-  async getByOrder(orderId: string): Promise<StockReceipt[]> {
-    const q = query(collection(getFirestoreDb(), REC), where('orderId', '==', orderId));
+  async getAll(): Promise<StockReceipt[]> {
+    const snap = await getDocs(collection(getFirestoreDb(), REC));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as StockReceipt));
+  }
+  async getByOffice(office: string): Promise<StockReceipt[]> {
+    const q = query(collection(getFirestoreDb(), REC), where('office', '==', office));
+    const snap = await getDocs(q); return snap.docs.map(d => ({ id: d.id, ...d.data() } as StockReceipt));
+  }
+  async getByOrder(orderId: string, office?: string): Promise<StockReceipt[]> {
+    const constraints = [where('orderId', '==', orderId)];
+    if (office) constraints.push(where('office', '==', office));
+    const q = query(collection(getFirestoreDb(), REC), ...constraints);
     const snap = await getDocs(q); return snap.docs.map(d => ({ id: d.id, ...d.data() } as StockReceipt));
   }
   async create(data: StockReceipt): Promise<StockReceipt> {

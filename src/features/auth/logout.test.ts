@@ -14,11 +14,13 @@ vi.mock('react-router-dom', async importOriginal => ({
 
 vi.mock('../../services/authService.ts', () => ({
   getSession: () => ({ staffId: 'admin-user', name: 'Administrator', role: 'admin', loginAt: '2026-08-02T00:00:00.000Z' }),
+  isAdmin: () => true,
   logout,
 }));
 
 vi.mock('../../services/authService', () => ({
   getSession: () => ({ staffId: 'admin-user', name: 'Administrator', role: 'admin', loginAt: '2026-08-02T00:00:00.000Z' }),
+  isAdmin: () => true,
   logout,
 }));
 

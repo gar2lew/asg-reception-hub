@@ -3,8 +3,7 @@ import { OrderLineItemRepository } from '../repositories/localStorage/OrderLineI
 import { StockCatalogueRepository } from '../repositories/localStorage/StockCatalogueRepository';
 import { StockInventoryRepository } from '../repositories/localStorage/StockInventoryRepository';
 import { SupplierRepository } from '../repositories/localStorage/SupplierRepository';
-import { nowISO } from '../utils/date';
-import type { StockOrder, OrderLineItem } from '../models';
+import type { StockOrder } from '../models';
 
 const orderRepo = new StockOrderRepository();
 const lineRepo = new OrderLineItemRepository();
@@ -51,4 +50,25 @@ export function localSubmitOrder(orderId: string, supplierId: string | undefined
     const item = catRepo.getById(line.stockItemId)!;
     lineRepo.create({ orderId, stockItemId: line.stockItemId, itemName: item.itemName, unitLabel: item.unitLabel, quantityRequested: line.quantityRequested });
   }
+}
+
+export function localSubmitSavedDraft(orderId: string, supplierId: string | undefined, uid: string): void {
+  const order = orderRepo.getById(orderId);
+  if (!order) throw new Error('Order not found.');
+  if (order.requestedBy !== uid) throw new Error('Not your order.');
+  if (order.status !== 'draft') throw new Error('Can only submit drafts.');
+  const supplier = supplierId ? suppRepo.getById(supplierId) : null;
+  if (supplier && !supplier.active) throw new Error('Supplier is archived.');
+  const lines = lineRepo.getByOrder(orderId);
+  validateOrderLines(lines.map(line => ({
+    orderId,
+    office: order.office,
+    stockItemId: line.stockItemId,
+    quantityRequested: line.quantityRequested,
+  })));
+  orderRepo.update(orderId, {
+    status: 'requested',
+    supplierId: supplierId || undefined,
+    supplierName: supplier?.name || undefined,
+  });
 }

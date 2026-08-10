@@ -1,121 +1,185 @@
-import { useState } from 'react';
-import { Plus, Trash2, Send, X, Eye } from 'lucide-react';
-import { Card, CardHeader, CardTitle } from '../../components/Card/Card';
+import { useCallback, useEffect, useState } from 'react';
+import { Eye, Plus, Send, Trash2, X } from 'lucide-react';
 import { Badge } from '../../components/Badge/Badge';
 import { Button } from '../../components/Button/Button';
+import { Card } from '../../components/Card/Card';
 import { Input } from '../../components/Input/Input';
-import { Select } from '../../components/Select/Select';
 import { Modal } from '../../components/Modal/Modal';
+import { Select } from '../../components/Select/Select';
+import type { OrderLineItem, StockCatalogueItem, StockOrder, Supplier } from '../../models';
 import { getSession } from '../../services/authService';
-import { StockOrderRepository } from '../../repositories/localStorage/StockOrderRepository';
-import { OrderLineItemRepository } from '../../repositories/localStorage/OrderLineItemRepository';
-import { StockCatalogueRepository } from '../../repositories/localStorage/StockCatalogueRepository';
-import { StockInventoryRepository } from '../../repositories/localStorage/StockInventoryRepository';
-import { SupplierRepository } from '../../repositories/localStorage/SupplierRepository';
-import { localCreateDraft, localSubmitOrder } from '../../services/orderService';
+import { cancelOrder, createOrderDraft, submitOrder, type DraftLine } from '../../services/stockOrderActions';
+import { loadOrderLines, loadOrderReferenceData, loadOrders } from '../../services/stockOrderReads';
 import styles from '../admin/AdminPage.module.css';
 
-const orderRepo = new StockOrderRepository();
-const lineRepo = new OrderLineItemRepository();
-const catRepo = new StockCatalogueRepository();
-const invRepo = new StockInventoryRepository();
-const suppRepo = new SupplierRepository();
-
 const STATUS_LABEL: Record<string, string> = { draft: 'Draft', requested: 'Requested', approved: 'Approved', rejected: 'Rejected', ordered: 'Ordered', 'partially-received': 'Partial', received: 'Received', cancelled: 'Cancelled' };
-const STATUS_VAR: Record<string, any> = { draft: 'default', requested: 'info', approved: 'success', rejected: 'danger', ordered: 'warning', cancelled: 'default' };
+const STATUS_VAR: Record<string, 'default' | 'info' | 'success' | 'danger' | 'warning'> = { draft: 'default', requested: 'info', approved: 'success', rejected: 'danger', ordered: 'warning', 'partially-received': 'info', received: 'success', cancelled: 'default' };
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : 'The order request could not be completed.';
+}
 
 export function OrdersPage() {
-  const session = getSession(); const [, refresh] = useState(0);
-  const [showCreate, setShowCreate] = useState(false); const [showDetail, setShowDetail] = useState<string | null>(null);
-  const [supplierId, setSupplierId] = useState(''); const [notes, setNotes] = useState('');
-  const [lines, setLines] = useState<{ stockItemId: string; qty: number }[]>([]);
-  const [selItem, setSelItem] = useState(''); const [selQty, setSelQty] = useState(0);
-  const uid = session?.staffId || ''; const office = session?.location || 'brisbane'; const isAdmin = session?.role === 'admin';
-  const force = () => refresh(n => n + 1);
-  const orders = orderRepo.getAll().filter(o => isAdmin || o.office === office || o.requestedBy === uid);
-  const items = catRepo.getActive(); const suppliers = suppRepo.getActive();
+  const session = getSession();
+  const uid = session?.staffId ?? '';
+  const office = session?.location ?? '';
+  const role = session?.role ?? '';
+  const [orders, setOrders] = useState<StockOrder[]>([]);
+  const [orderLines, setOrderLines] = useState<Record<string, OrderLineItem[]>>({});
+  const [items, setItems] = useState<StockCatalogueItem[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
+  const [showDetail, setShowDetail] = useState<string | null>(null);
+  const [supplierId, setSupplierId] = useState('');
+  const [notes, setNotes] = useState('');
+  const [lines, setLines] = useState<DraftLine[]>([]);
+  const [selectedItem, setSelectedItem] = useState('');
+  const [selectedQuantity, setSelectedQuantity] = useState(0);
+
+  const refresh = useCallback(async () => {
+    if (!uid) return;
+    setLoading(true);
+    setError('');
+    try {
+      const [loadedOrders, referenceData] = await Promise.all([
+        loadOrders({ role, location: office }),
+        loadOrderReferenceData(),
+      ]);
+      const entries = await Promise.all(loadedOrders.map(async order => [order.id, await loadOrderLines(order.id)] as const));
+      setOrders(loadedOrders);
+      setOrderLines(Object.fromEntries(entries));
+      setItems(referenceData.items);
+      setSuppliers(referenceData.suppliers);
+    } catch (loadError) {
+      setError(errorText(loadError));
+    } finally {
+      setLoading(false);
+    }
+  }, [office, role, uid]);
+
+  useEffect(() => { void refresh(); }, [refresh]);
 
   const addLine = () => {
-    if (!selItem || selQty <= 0) return;
-    if (lines.find(l => l.stockItemId === selItem)) return;
-    setLines([...lines, { stockItemId: selItem, qty: selQty }]); setSelItem(''); setSelQty(0);
+    const item = items.find(candidate => candidate.id === selectedItem);
+    if (!item || selectedQuantity <= 0 || lines.some(line => line.stockItemId === item.id)) return;
+    setLines(previous => [...previous, {
+      stockItemId: item.id,
+      itemName: item.itemName,
+      unitLabel: item.unitLabel,
+      quantityRequested: selectedQuantity,
+    }]);
+    setSelectedItem('');
+    setSelectedQuantity(0);
   };
-  const createDraft = () => {
-    const draft = localCreateDraft(office, uid);
-    // Copy lines to order line items
-    for (const l of lines) {
-      const item = catRepo.getById(l.stockItemId);
-      if (item) lineRepo.create({ orderId: draft.id, stockItemId: l.stockItemId, itemName: item.itemName, unitLabel: item.unitLabel, quantityRequested: l.qty });
+
+  const runAction = async (action: () => Promise<unknown>) => {
+    setBusy(true);
+    setError('');
+    try {
+      await action();
+      await refresh();
+    } catch (actionError) {
+      setError(errorText(actionError));
+    } finally {
+      setBusy(false);
     }
-    setShowCreate(false); setLines([]); force();
   };
-  const submitDraft = (orderId: string) => {
-    const order = orderRepo.getById(orderId);
-    if (!order) return;
-    const orderLines = lineRepo.getByOrder(orderId);
-    localSubmitOrder(orderId, order.supplierId, orderLines.map(l => ({ stockItemId: l.stockItemId, itemName: l.itemName, unitLabel: l.unitLabel, quantityRequested: l.quantityRequested })), uid);
-    force();
+
+  const createAndSubmit = async () => {
+    if (!office || !uid || lines.length === 0) return;
+    setBusy(true);
+    setError('');
+    let draftId: string | null = null;
+    let failureMessage = '';
+    try {
+      const draft = await createOrderDraft({ office, requestedBy: uid, supplierId: supplierId || undefined, notes: notes || undefined, lines });
+      draftId = draft.id;
+      await submitOrder({ orderId: draft.id, supplierId: supplierId || undefined, notes: notes || undefined, requestedBy: uid, lines });
+      setShowCreate(false);
+      setLines([]);
+      setSupplierId('');
+      setNotes('');
+    } catch (submitError) {
+      let cleanupFailed = false;
+      if (draftId) {
+        try {
+          await cancelOrder({ orderId: draftId, reason: 'Automatic cleanup after submit failure' });
+        } catch {
+          cleanupFailed = true;
+          failureMessage = `${errorText(submitError)} Draft ${draftId.slice(0, 8)} remains available to cancel from the order list.`;
+        }
+      }
+      if (!cleanupFailed) failureMessage = errorText(submitError);
+    } finally {
+      await refresh();
+      if (failureMessage) setError(failureMessage);
+      setBusy(false);
+    }
   };
-  const cancelDraft = (orderId: string) => {
-    const order = orderRepo.getById(orderId);
-    if (order?.requestedBy !== uid && !isAdmin) return;
-    orderRepo.update(orderId, { status: 'cancelled' }); force();
-  };
+
+  const submitSavedDraft = (order: StockOrder) => runAction(() => submitOrder({
+    orderId: order.id,
+    supplierId: order.supplierId,
+    notes: order.notes,
+    requestedBy: uid,
+    lines: (orderLines[order.id] ?? []).map(line => ({
+      stockItemId: line.stockItemId,
+      itemName: line.itemName,
+      unitLabel: line.unitLabel,
+      quantityRequested: line.quantityRequested,
+    })),
+  }));
+
+  const selectedOrder = orders.find(order => order.id === showDetail);
+
   return (
     <div className={styles.page}>
-      <div className={styles.header}><h1 className={styles.pageTitle}>Stock Orders</h1><Button size="sm" onClick={() => { setLines([]); setSupplierId(""); setNotes(""); setShowCreate(true); }}><Plus size={14} /> New Order</Button></div>
-      <Card><div className={styles.table}><div className={`${styles.tableRow} ${styles.tableHeader}`}><span>ID</span><span>Status</span><span>Office</span><span>Items</span><span>Created</span><span>Actions</span></div>
-        {orders.map(o => {
-          const orderLines = lineRepo.getByOrder(o.id);
-          return <div key={o.id} className={styles.tableRow}>
-            <span style={{ fontSize: 12 }}>{o.id.slice(0, 8)}</span>
-            <span><Badge variant={STATUS_VAR[o.status] || "default"}>{STATUS_LABEL[o.status] || o.status}</Badge></span>
-            <span>{o.office}</span><span>{orderLines.length} lines</span>
-            <span style={{ fontSize: 12 }}>{new Date(o.createdAt).toLocaleDateString()}</span>
-            <span className={styles.actionCell}>
-              <Button variant="ghost" size="sm" onClick={() => setShowDetail(o.id)}><Eye size={14} /></Button>
-              {o.status === "draft" && o.requestedBy === uid && <Button variant="ghost" size="sm" onClick={() => submitDraft(o.id)}><Send size={14} /></Button>}
-              {o.status === "draft" && (o.requestedBy === uid || isAdmin) && <Button variant="ghost" size="sm" onClick={() => cancelDraft(o.id)}><X size={14} /></Button>}
-            </span>
-          </div>;
-        })}
-      </div></Card>
+      <div className={styles.header}>
+        <h1 className={styles.pageTitle}>Stock Orders</h1>
+        <Button size="sm" onClick={() => { setLines([]); setSupplierId(''); setNotes(''); setShowCreate(true); }}><Plus size={14} /> New Order</Button>
+      </div>
+      {error && <p role="alert">{error}</p>}
+      {loading ? <p>Loading orders...</p> : <Card><div className={styles.table}>
+        <div className={`${styles.tableRow} ${styles.tableHeader}`}><span>ID</span><span>Status</span><span>Office</span><span>Items</span><span>Created</span><span>Actions</span></div>
+        {orders.map(order => <div key={order.id} className={styles.tableRow}>
+          <span style={{ fontSize: 12 }}>{order.id.slice(0, 8)}</span>
+          <span><Badge variant={STATUS_VAR[order.status] ?? 'default'}>{STATUS_LABEL[order.status] ?? order.status}</Badge></span>
+          <span>{order.office}</span><span>{orderLines[order.id]?.length ?? 0} lines</span>
+          <span style={{ fontSize: 12 }}>{new Date(order.createdAt).toLocaleDateString()}</span>
+          <span className={styles.actionCell}>
+            <Button aria-label={`View order ${order.id}`} variant="ghost" size="sm" onClick={() => setShowDetail(order.id)}><Eye size={14} /></Button>
+            {order.status === 'draft' && order.requestedBy === uid && (orderLines[order.id]?.length ?? 0) > 0 && <Button aria-label={`Submit order ${order.id}`} variant="ghost" size="sm" disabled={busy} onClick={() => void submitSavedDraft(order)}><Send size={14} /></Button>}
+            {order.status === 'draft' && order.requestedBy === uid && <Button aria-label={`Cancel order ${order.id}`} variant="ghost" size="sm" disabled={busy} onClick={() => void runAction(() => cancelOrder({ orderId: order.id }))}><X size={14} /></Button>}
+          </span>
+        </div>)}
+      </div></Card>}
 
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="New Order Draft" width="600px">
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="New Stock Order" width="600px">
         <div className={styles.modalForm}>
-          <Select label="Supplier" value={supplierId} onChange={e => setSupplierId(e.target.value)} options={[{ value: "", label: "None" }, ...suppliers.map(s => ({ value: s.id, label: s.name }))]} />
-          <div style={{ display: "flex", gap: 8, alignItems: "end" }}>
-            <Select label="Add Item" value={selItem} onChange={e => setSelItem(e.target.value)} options={[{ value: "", label: "Select..." }, ...items.map(i => ({ value: i.id, label: i.itemName }))]} style={{ flex: 1 }} />
-            <Input label="Qty" type="number" value={String(selQty)} onChange={e => setSelQty(parseInt(e.target.value) || 0)} style={{ width: 80 }} />
+          <Select label="Supplier" value={supplierId} onChange={event => setSupplierId(event.target.value)} options={[{ value: '', label: 'None' }, ...suppliers.map(supplier => ({ value: supplier.id, label: supplier.name }))]} />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
+            <Select label="Add Item" value={selectedItem} onChange={event => setSelectedItem(event.target.value)} options={[{ value: '', label: 'Select...' }, ...items.map(item => ({ value: item.id, label: item.itemName }))]} style={{ flex: 1 }} />
+            <Input label="Qty" type="number" value={String(selectedQuantity)} onChange={event => setSelectedQuantity(Number.parseInt(event.target.value, 10) || 0)} style={{ width: 80 }} />
             <Button size="sm" onClick={addLine}>Add</Button>
           </div>
-          {lines.map((l, i) => {
-            const item = catRepo.getById(l.stockItemId);
-            return <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13, borderBottom: "1px solid #ede5d8" }}>
-              <span>{item?.itemName || l.stockItemId} x {l.qty}</span>
-              <button onClick={() => setLines(lines.filter((_, idx) => idx !== i))} style={{ border: "none", background: "none", cursor: "pointer", color: "#b33c2f" }}><Trash2 size={14} /></button>
-            </div>;
-          })}
-          <Input label="Notes" value={notes} onChange={e => setNotes(e.target.value)} />
-          <div className={styles.modalActions}><Button variant="secondary" onClick={() => setShowCreate(false)}>Cancel</Button><Button onClick={createDraft} disabled={lines.length === 0}>Create Draft</Button></div>
+          {lines.map(line => <div key={line.stockItemId} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 13, borderBottom: '1px solid #ede5d8' }}>
+            <span>{line.itemName} × {line.quantityRequested}</span>
+            <button aria-label={`Remove ${line.itemName}`} onClick={() => setLines(previous => previous.filter(candidate => candidate.stockItemId !== line.stockItemId))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#b33c2f' }}><Trash2 size={14} /></button>
+          </div>)}
+          <Input label="Notes" value={notes} onChange={event => setNotes(event.target.value)} />
+          <div className={styles.modalActions}><Button variant="secondary" onClick={() => setShowCreate(false)}>Cancel</Button><Button onClick={() => void createAndSubmit()} disabled={busy || lines.length === 0}>{busy ? 'Submitting...' : 'Submit Order'}</Button></div>
         </div>
       </Modal>
 
-      <Modal open={!!showDetail} onClose={() => setShowDetail(null)} title="Order Detail" width="600px">
-        {showDetail && (() => {
-          const order = orderRepo.getById(showDetail);
-          if (!order) return null;
-          const orderLines = lineRepo.getByOrder(showDetail);
-          return <div className={styles.modalForm}>
-            <div style={{ fontSize: 13 }}><strong>Status:</strong> <Badge variant={STATUS_VAR[order.status]}>{STATUS_LABEL[order.status]}</Badge></div>
-            <div style={{ fontSize: 13 }}><strong>Office:</strong> {order.office}</div>
-            <div style={{ fontSize: 13 }}><strong>Created:</strong> {new Date(order.createdAt).toLocaleString()}</div>
-            {orderLines.map(l => <div key={l.id} style={{ borderBottom: "1px solid #ede5d8", padding: "6px 0", fontSize: 13 }}>
-              <strong>{l.itemName}</strong> — Requested: {l.quantityRequested} {l.unitLabel}{l.quantityApproved != null ? ` | Approved: ${l.quantityApproved}` : ""}
-            </div>)}
-            {order.status === "draft" && order.requestedBy === uid && <Button onClick={() => { submitDraft(showDetail); setShowDetail(null); }}>Submit Request</Button>}
-          </div>;
-        })()}
+      <Modal open={Boolean(selectedOrder)} onClose={() => setShowDetail(null)} title="Order Detail" width="600px">
+        {selectedOrder && <div className={styles.modalForm}>
+          <div><strong>Status:</strong> <Badge variant={STATUS_VAR[selectedOrder.status] ?? 'default'}>{STATUS_LABEL[selectedOrder.status] ?? selectedOrder.status}</Badge></div>
+          <div><strong>Office:</strong> {selectedOrder.office}</div>
+          {(orderLines[selectedOrder.id] ?? []).map(line => <div key={line.id}><strong>{line.itemName}</strong> — Requested: {line.quantityRequested} {line.unitLabel}</div>)}
+        </div>}
       </Modal>
     </div>
   );

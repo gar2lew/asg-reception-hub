@@ -1,9 +1,13 @@
-import { collection, getDocs, getDoc, doc, addDoc, updateDoc, query, where, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, addDoc, updateDoc, query, where } from 'firebase/firestore';
 import { getFirestoreDb } from '../../firebase/config';
 import type { StockInventory } from '../../models';
 import { nowISO } from '../../utils/date';
 const COLL = 'stockInventory';
 export class FirebaseStockInventoryRepository {
+  async getAll(): Promise<StockInventory[]> {
+    const snap = await getDocs(collection(getFirestoreDb(), COLL));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as StockInventory));
+  }
   async getByItem(stockItemId: string): Promise<StockInventory[]> {
     const q = query(collection(getFirestoreDb(), COLL), where('stockItemId', '==', stockItemId));
     const snap = await getDocs(q); return snap.docs.map(d => ({ id: d.id, ...d.data() } as StockInventory));

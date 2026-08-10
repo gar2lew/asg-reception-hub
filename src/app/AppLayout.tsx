@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, SquareCheckBig, GraduationCap, Link2, Package, Printer, Users, Shield, LogOut, Menu, ChevronDown, BarChart3, UserRoundPlus } from 'lucide-react';
+import { LayoutDashboard, SquareCheckBig, GraduationCap, Link2, Package, Printer, Users, Shield, LogOut, Menu, BarChart3, UserRoundPlus } from 'lucide-react';
 import { getSession, logout, isAdmin } from '../services/authService';
 import styles from './AppLayout.module.css';
 type NavGroup = { label: string; items: { to: string; icon: any; label: string }[] };
 const NAV_GROUPS: NavGroup[] = [
   { label: 'Workspace', items: [{ to: '/', icon: LayoutDashboard, label: "Today's Workspace" }, { to: '/tasks', icon: SquareCheckBig, label: 'Daily Tasks' }, { to: '/draps', icon: BarChart3, label: 'DRAPS & Stats' }, { to: '/representatives', icon: UserRoundPlus, label: 'Representatives' }] },
-  { label: 'Operations', items: [{ to: '/quick-links', icon: Link2, label: 'Quick Links' }, { to: '/stock', icon: Package, label: 'Stock' }, { to: '/printing', icon: Printer, label: 'Printing Register' }] },
+  { label: 'Operations', items: [{ to: '/quick-links', icon: Link2, label: 'Quick Links' }, { to: '/stock', icon: Package, label: 'Stock' }, { to: '/orders', icon: Package, label: 'Orders' }, { to: '/printing', icon: Printer, label: 'Printing Register' }] },
   { label: 'Knowledge', items: [{ to: '/training', icon: GraduationCap, label: 'Training Centre' }] },
   { label: 'People', items: [{ to: '/contacts', icon: Users, label: 'Contacts' }] },
 ];

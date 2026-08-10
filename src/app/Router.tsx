@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter, Navigate, useNavigate } from 'react-router-dom';
 import { AppLayout } from './AppLayout';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
 import { TasksPage } from '../features/tasks/TasksPage';
@@ -9,6 +9,7 @@ import { ContactsPage } from '../features/contacts/ContactsPage';
 import { StockPage } from '../features/stock/StockPage';
 import { PrintingPage } from '../features/printing/PrintingPage';
 import { AdminPage } from '../features/admin/AdminPage';
+import { OrdersPage } from '../features/orders/OrdersPage';
 import { RepresentativesPage } from '../features/representatives/RepresentativesPage';
 import { DrapsPage } from '../features/draps/DrapsPage';
 import { PreviousReportsPage } from '../features/draps/PreviousReportsPage';
@@ -20,6 +21,11 @@ import type { ReactNode } from 'react';
 function ProtectedRoute({ children }: { children: ReactNode }) {
   if (!isAuthenticated()) return <Navigate to="/login" replace />;
   return <>{children}</>;
+}
+
+function LoginRoute() {
+  const navigate = useNavigate();
+  return <LoginPage onLogin={() => navigate('/', { replace: true })} />;
 }
 
 export const router = createBrowserRouter([
@@ -34,6 +40,7 @@ export const router = createBrowserRouter([
       { path: 'quick-links', element: <QuickLinksPage /> },
       { path: 'contacts', element: <ContactsPage /> },
       { path: 'stock', element: <StockPage /> },
+      { path: 'orders', element: <OrdersPage /> },
       { path: 'printing', element: <PrintingPage /> },
       { path: 'admin', element: <AdminPage /> },
       { path: 'representatives', element: <RepresentativesPage /> },
@@ -42,5 +49,5 @@ export const router = createBrowserRouter([
       { path: 'draps/print', element: <DrapsPrintPage /> },
     ],
   },
-  { path: '/login', element: <LoginPage /> },
+  { path: '/login', element: <LoginRoute /> },
 ]);

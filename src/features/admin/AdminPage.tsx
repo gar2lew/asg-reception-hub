@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Shield, Plus, Pencil, RefreshCw, Archive, RotateCcw } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '../../components/Card/Card';
 import { Button } from '../../components/Button/Button';
@@ -19,6 +20,7 @@ import { simpleHash } from '../../utils/hash';
 import { clearAll } from '../../utils/storage';
 import { nowISO } from '../../utils/date';
 import type { Staff, StaffRole } from '../../models';
+import { AdminOrdersSection } from './AdminOrdersSection';
 import styles from './AdminPage.module.css';
 
 const fb = getProvider() === 'firebase';
@@ -42,11 +44,16 @@ function buildScheduleSummary(f: any) {
   return 'Schedule not set';
 }
 
-type AdminTab = 'tasks' | 'staff' | 'training' | 'templates' | 'categories' | 'suppliers' | 'archived-stock' | 'operations';
+type AdminTab = 'tasks' | 'staff' | 'training' | 'templates' | 'categories' | 'suppliers' | 'archived-stock' | 'orders' | 'operations';
+
+const ADMIN_TABS: AdminTab[] = ['tasks', 'staff', 'training', 'templates', 'categories', 'suppliers', 'archived-stock', 'orders', 'operations'];
 
 export function AdminPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [, refresh] = useState(0);
-  const [tab, setTab] = useState<AdminTab>('tasks');
+  const requestedTab = searchParams.get('tab');
+  const initialTab = requestedTab && ADMIN_TABS.includes(requestedTab as AdminTab) ? requestedTab as AdminTab : 'tasks';
+  const [tab, setTab] = useState<AdminTab>(initialTab);
   const forceRefresh = () => refresh(n => n + 1);
 
   const [allTasks, setAllTasks] = useState<any[]>([]);
@@ -116,19 +123,21 @@ export function AdminPage() {
     { id: 'training', label: 'Training' }, { id: 'templates', label: 'Templates' },
     { id: 'categories', label: 'Categories' }, { id: 'suppliers', label: 'Suppliers' },
     { id: 'archived-stock', label: 'Archived Stock' },
+    { id: 'orders', label: 'Orders' },
     { id: 'operations', label: 'Operations' },
   ];
 
   return (
     <div className={styles.page}>
       <div className={styles.header}><h1 className={styles.pageTitle}><Shield size={20} /> Admin</h1><Button variant="danger" size="sm" onClick={() => { clearAll(); window.location.reload(); }}><RefreshCw size={14} /> Reset Data</Button></div>
-      <div className={styles.tabs}>{tabs.map(t => <button key={t.id} className={`${styles.tab} ${tab === t.id ? styles.tabActive : ''}`} onClick={() => setTab(t.id)}>{t.label}</button>)}</div>
+      <div className={styles.tabs}>{tabs.map(t => <button key={t.id} className={`${styles.tab} ${tab === t.id ? styles.tabActive : ''}`} onClick={() => { setTab(t.id); setSearchParams(t.id === 'tasks' ? {} : { tab: t.id }); }}>{t.label}</button>)}</div>
 
       {tab === 'tasks' && <Card><CardHeader><CardTitle>Task Definitions ({allTasks.length})</CardTitle><Button size="sm" onClick={openNew}><Plus size={14} /> New Task</Button>{taskMessage && <span style={{ fontSize: '0.85rem', color: taskMessage.type === 'error' ? 'var(--asg-color-danger, #dc3545)' : 'var(--asg-color-success, #198754)', fontWeight: 500 }}>{taskMessage.text}</span>}</CardHeader>
         <div className={styles.table}><div className={`${styles.tableRow} ${styles.tableHeader}`}><span>Title</span><span>Recurrence</span><span>Priority</span><span>Active</span><span></span></div>
         {allTasks.map((t: any) => <div key={t.id} className={styles.tableRow}><span>{t.title}</span><span><Badge>{t.recurrence}</Badge></span><span><Badge variant={t.priority === 'high' ? 'danger' : 'default'}>{t.priority}</Badge></span><span>{t.active ? <Badge variant="success">Active</Badge> : <Badge variant="default">Archived</Badge>}</span><span className={styles.actionCell}><Button variant="ghost" size="sm" onClick={() => openEdit(t)}><Pencil size={12} /></Button>{t.active ? <Button variant="ghost" size="sm" onClick={() => toggleActive(t.id, false)}><Archive size={12} /></Button> : <Button variant="ghost" size="sm" onClick={() => toggleActive(t.id, true)}><RotateCcw size={12} /></Button>}</span></div>)}
         </div>
       </Card>}
+      {tab === 'orders' && <AdminOrdersSection />}
 
       <Modal open={showTaskModal} onClose={() => setShowTaskModal(false)} title={editingTaskId ? 'Edit Task' : 'New Task'} width="640px">
         <div className={styles.modalForm}>
