@@ -130,7 +130,10 @@ describe('Firebase authentication', () => {
 
     const result = await login('Administrator', '1234');
 
-    expect(result).toEqual({ success: false, error: 'Login failed.' });
+    expect(result).toEqual({
+      success: false,
+      error: 'Your account was verified, but your profile could not be loaded.',
+    });
     expect(getSession()).toBeNull();
   });
 
@@ -144,5 +147,73 @@ describe('Firebase authentication', () => {
 
     expect(getSession()).toBeNull();
     expect(signOutFirebase).toHaveBeenCalledOnce();
+  });
+});
+
+describe('Firebase login failure categorisation', () => {
+  beforeEach(() => {
+    getProvider.mockReturnValue('firebase');
+  });
+
+  it.each([
+    ['functions/unauthenticated', 'Incorrect account or PIN.'],
+    ['functions/invalid-argument', 'Incorrect account or PIN.'],
+    ['functions/not-found', 'Incorrect account or PIN.'],
+  ])('maps %s to the invalid-credentials message', async (code, message) => {
+    signInWithPin.mockRejectedValue({ code, message: 'Authentication failed.' });
+
+    const result = await login('Administrator', '1234');
+
+    expect(result).toEqual({ success: false, error: message });
+    expect(getSession()).toBeNull();
+  });
+
+  it.each([
+    ['functions/internal', 'Login service unavailable. Please try again.'],
+    ['functions/unavailable', 'Login service unavailable. Please try again.'],
+    ['functions/deadline-exceeded', 'Login service unavailable. Please try again.'],
+    ['auth/network-request-failed', 'Login service unavailable. Please try again.'],
+  ])('maps %s to the service-unavailable message', async (code, message) => {
+    signInWithPin.mockRejectedValue({ code, message: 'Service down.' });
+
+    const result = await login('Administrator', '1234');
+
+    expect(result).toEqual({ success: false, error: message });
+    expect(getSession()).toBeNull();
+  });
+
+  it('maps an unknown account lookup to the invalid-credentials message', async () => {
+    signInWithPin.mockRejectedValue(new Error('Unknown account: Administrator'));
+
+    const result = await login('Administrator', '1234');
+
+    expect(result).toEqual({ success: false, error: 'Incorrect account or PIN.' });
+    expect(getSession()).toBeNull();
+  });
+
+  it('keeps unknown errors user-safe', async () => {
+    signInWithPin.mockRejectedValue(new Error('Something unexpected happened'));
+
+    const result = await login('Administrator', '1234');
+
+    expect(result).toEqual({ success: false, error: 'Login failed.' });
+    expect(getSession()).toBeNull();
+  });
+
+  it('reports profile failures after the sign-in call succeeded', async () => {
+    signInWithPin.mockResolvedValue({
+      uid: 'admin-user',
+      getIdTokenResult: vi.fn().mockResolvedValue({
+        claims: { accountKey: 'administrator', role: 'not-a-role', office: 'all' },
+      }),
+    });
+
+    const result = await login('Administrator', '1234');
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Your account was verified, but your profile could not be loaded.',
+    });
+    expect(getSession()).toBeNull();
   });
 });
