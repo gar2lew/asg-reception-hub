@@ -17,7 +17,7 @@ const ADMIN_GROUP: NavGroup = {
     { to: '/admin?tab=categories', icon: Package, label: 'Stock Categories' },
     { to: '/admin?tab=suppliers', icon: Package, label: 'Suppliers' },
     { to: '/admin?tab=archived-stock', icon: Package, label: 'Archived Stock' },
-    { to: '/admin?tab=orders', icon: Package, label: 'Orders' },
+    { to: '/admin?tab=orders', icon: Package, label: 'Order Management' },
   ],
 };
 export function AppLayout() {
@@ -42,7 +42,7 @@ export function AppLayout() {
               <div key={group.label} className={styles.navGroup}>
                 <span className={styles.navGroupLabel}>{group.label}</span>
                 {group.items.map(item => {
-                  const active = location.pathname === item.to || (item.to.includes('?') && location.pathname + location.search === item.to);
+                  const active = item.to.includes('?') ? location.pathname + location.search === item.to : location.pathname === item.to && location.search === '';
                   return <button key={item.to} onClick={() => navigate(item.to)} className={`${styles.navLink} ${active ? styles.navLinkActive : ''}`} aria-current={active ? 'page' : undefined}><item.icon size={18} /><span>{item.label}</span></button>;
                 })}
               </div>

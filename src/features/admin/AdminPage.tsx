@@ -21,6 +21,9 @@ import { clearAll } from '../../utils/storage';
 import { nowISO } from '../../utils/date';
 import type { Staff, StaffRole } from '../../models';
 import { AdminOrdersSection } from './AdminOrdersSection';
+import { CategoriesSection } from './CategoriesSection';
+import { SuppliersSection } from './SuppliersSection';
+import { ArchivedStockSection } from './ArchivedStockSection';
 import styles from './AdminPage.module.css';
 
 const fb = getProvider() === 'firebase';
@@ -52,8 +55,7 @@ export function AdminPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [, refresh] = useState(0);
   const requestedTab = searchParams.get('tab');
-  const initialTab = requestedTab && ADMIN_TABS.includes(requestedTab as AdminTab) ? requestedTab as AdminTab : 'tasks';
-  const [tab, setTab] = useState<AdminTab>(initialTab);
+  const tab: AdminTab = requestedTab && ADMIN_TABS.includes(requestedTab as AdminTab) ? requestedTab as AdminTab : 'tasks';
   const forceRefresh = () => refresh(n => n + 1);
 
   const [allTasks, setAllTasks] = useState<any[]>([]);
@@ -62,6 +64,28 @@ export function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [taskMessage, setTaskMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [taskForm, setTaskForm] = useState({ title: '', description: '', category: 'daily', recurrence: 'daily' as string, priority: 'normal' as string, required: true, assignedStaffIds: [...RECIPIENTS], dueTime: '', instructions: '', externalUrl: '' });
+
+  const [staffForm, setStaffForm] = useState({ name: '', pin: '', role: 'receptionist' as StaffRole, email: '', phone: '', jobTitle: '' });
+  const [staffLocation, setStaffLocation] = useState('');
+  const [editingStaff, setEditingStaff] = useState<string | null>(null);
+  const [showStaffModal, setShowStaffModal] = useState(false);
+
+  const saveStaff = () => {
+    if (editingStaff) {
+      const data: Partial<Staff> = { name: staffForm.name, location: staffLocation || undefined, email: staffForm.email || undefined, phone: staffForm.phone || undefined, jobTitle: staffForm.jobTitle || undefined };
+      if (staffForm.pin) data.pinHash = simpleHash(staffForm.pin);
+      staffRepo.update(editingStaff, data);
+    } else {
+      staffRepo.create({ name: staffForm.name, pin: staffForm.pin, role: staffForm.role, location: staffLocation || undefined, email: staffForm.email || undefined, phone: staffForm.phone || undefined, jobTitle: staffForm.jobTitle || undefined });
+    }
+    setShowStaffModal(false); setEditingStaff(null);
+    setStaffForm({ name: '', pin: '', role: 'receptionist', email: '', phone: '', jobTitle: '' }); setStaffLocation('');
+    forceRefresh();
+  };
+  const editStaff = (s: Staff) => {
+    setStaffForm({ name: s.name, pin: '', role: s.role, email: s.email || '', phone: s.phone || '', jobTitle: s.jobTitle || '' });
+    setStaffLocation(s.location || ''); setEditingStaff(s.id); setShowStaffModal(true);
+  };
 
   const loadTasks = () => {
     Promise.resolve(taskDefRepo.getAll())
@@ -130,7 +154,7 @@ export function AdminPage() {
   return (
     <div className={styles.page}>
       <div className={styles.header}><h1 className={styles.pageTitle}><Shield size={20} /> Admin</h1><Button variant="danger" size="sm" onClick={() => { clearAll(); window.location.reload(); }}><RefreshCw size={14} /> Reset Data</Button></div>
-      <div className={styles.tabs}>{tabs.map(t => <button key={t.id} className={`${styles.tab} ${tab === t.id ? styles.tabActive : ''}`} onClick={() => { setTab(t.id); setSearchParams(t.id === 'tasks' ? {} : { tab: t.id }); }}>{t.label}</button>)}</div>
+      <div className={styles.tabs}>{tabs.map(t => <button key={t.id} className={`${styles.tab} ${tab === t.id ? styles.tabActive : ''}`} onClick={() => setSearchParams(t.id === 'tasks' ? {} : { tab: t.id })}>{t.label}</button>)}</div>
 
       {tab === 'tasks' && <Card><CardHeader><CardTitle>Task Definitions ({allTasks.length})</CardTitle><Button size="sm" onClick={openNew}><Plus size={14} /> New Task</Button>{taskMessage && <span style={{ fontSize: '0.85rem', color: taskMessage.type === 'error' ? 'var(--asg-color-danger, #dc3545)' : 'var(--asg-color-success, #198754)', fontWeight: 500 }}>{taskMessage.text}</span>}</CardHeader>
         <div className={styles.table}><div className={`${styles.tableRow} ${styles.tableHeader}`}><span>Title</span><span>Recurrence</span><span>Priority</span><span>Active</span><span></span></div>
@@ -138,6 +162,38 @@ export function AdminPage() {
         </div>
       </Card>}
       {tab === 'orders' && <AdminOrdersSection />}
+      {tab === 'staff' && (
+        <Card><CardHeader><CardTitle>Staff Accounts <Button variant="ghost" size="sm" onClick={() => { setStaffForm({ name: '', pin: '', role: 'receptionist', email: '', phone: '', jobTitle: '' }); setStaffLocation(''); setEditingStaff(null); setShowStaffModal(true); }}><Plus size={14} /> Add Staff</Button></CardTitle></CardHeader>
+          <div className={styles.table}><div className={`${styles.tableRow} ${styles.tableHeader}`}><span>Name</span><span>Role</span><span>Location</span><span>Email</span><span>Actions</span></div>
+          {staffRepo.getAll().filter(s => s.active).map(s => (<div key={s.id} className={styles.tableRow}><span>{s.name}</span><span><Badge>{s.role === 'admin' ? 'Admin' : 'Receptionist'}</Badge></span><span>{s.location || '—'}</span><span>{s.email || '—'}</span><span className={styles.actionCell}><Button variant="ghost" size="sm" onClick={() => editStaff(s)}><Pencil size={12} /> Edit</Button></span></div>))}
+          </div>
+        </Card>
+      )}
+      {tab === 'training' && (
+        <Card><CardHeader><CardTitle>Training Items ({trainingRepo.getAll().length})</CardTitle></CardHeader>
+          <div className={styles.table}><div className={`${styles.tableRow} ${styles.tableHeader}`}><span>Title</span><span>Category</span><span>Duration</span><span>Active</span><span></span></div>
+          {trainingRepo.getAll().map((t: any) => (<div key={t.id} className={styles.tableRow}><span>{t.title}</span><span><Badge>{t.category}</Badge></span><span>{t.estimatedMinutes} min</span><span>{t.active ? <Badge variant="success">Active</Badge> : <Badge variant="default">Inactive</Badge>}</span><span></span></div>))}
+          </div>
+        </Card>
+      )}
+      {tab === 'templates' && (
+        <Card><CardHeader><CardTitle>Task Templates ({allTasks.length})</CardTitle></CardHeader>
+          <div className={styles.table}><div className={`${styles.tableRow} ${styles.tableHeader}`}><span>Title</span><span>Recurrence</span><span>Scope</span><span>Priority</span><span>Active</span></div>
+          {allTasks.filter((t: any) => t.scope !== 'personal').map((t: any) => (<div key={t.id} className={styles.tableRow}><span>{t.title}</span><span><Badge>{t.recurrence}</Badge></span><span><Badge>{t.scope}</Badge></span><span><Badge variant={t.priority === 'high' ? 'danger' : 'default'}>{t.priority}</Badge></span><span>{t.active ? <Badge variant="success">Active</Badge> : <Badge>Inactive</Badge>}</span></div>))}
+          </div>
+        </Card>
+      )}
+      {tab === 'categories' && <CategoriesSection />}
+      {tab === 'suppliers' && <SuppliersSection />}
+      {tab === 'archived-stock' && <ArchivedStockSection />}
+      {tab === 'operations' && (
+        <div className={styles.opsGrid}>
+          <Card><CardHeader><CardTitle>Quick Links ({quickLinkRepo.getAll().length})</CardTitle></CardHeader><p className={styles.opsNote}>Editable via seed data. Future: in-app editing.</p></Card>
+          <Card><CardHeader><CardTitle>Contacts ({contactRepo.getAll().length})</CardTitle></CardHeader><p className={styles.opsNote}>Editable via seed data. Future: in-app editing.</p></Card>
+          <Card><CardHeader><CardTitle>Stock Items ({stockRepo.getAll().length})</CardTitle></CardHeader><p className={styles.opsNote}>Staff can update quantities. Admin can edit items in future.</p></Card>
+          <Card><CardHeader><CardTitle>Print Resources ({printingRepo.getAll().length})</CardTitle></CardHeader><p className={styles.opsNote}>Staff can record print runs. Admin can edit items in future.</p></Card>
+        </div>
+      )}
 
       <Modal open={showTaskModal} onClose={() => setShowTaskModal(false)} title={editingTaskId ? 'Edit Task' : 'New Task'} width="640px">
         <div className={styles.modalForm}>
@@ -161,6 +217,18 @@ export function AdminPage() {
           <Input label="External URL" value={taskForm.externalUrl} onChange={e => setTaskForm(p => ({ ...p, externalUrl: e.target.value }))} placeholder="https://..." />
           <div className={styles.scheduleSummary}>{buildScheduleSummary(taskForm)}</div>
           <div className={styles.modalActions}><Button variant="secondary" onClick={() => setShowTaskModal(false)}>Cancel</Button><Button onClick={saveTask} disabled={saving}>{saving ? 'Saving...' : editingTaskId ? 'Save Changes' : 'Create Task'}</Button></div>
+        </div>
+      </Modal>
+
+      <Modal open={showStaffModal} onClose={() => setShowStaffModal(false)} title={editingStaff ? 'Edit Staff' : 'Add Staff'}>
+        <div className={styles.modalForm}>
+          <Input label="Name" value={staffForm.name} onChange={e => setStaffForm(p => ({ ...p, name: e.target.value }))} required />
+          <Input label="Location" value={staffLocation} onChange={e => setStaffLocation(e.target.value)} placeholder="e.g. Brisbane, Perth, All" />
+          <Input label={editingStaff ? 'New PIN (leave blank to keep current)' : 'PIN'} type="password" value={staffForm.pin} onChange={e => setStaffForm(p => ({ ...p, pin: e.target.value }))} maxLength={6} />
+          <Select label="Role" value={staffForm.role} onChange={e => setStaffForm(p => ({ ...p, role: e.target.value as StaffRole }))} options={[{ value: 'receptionist', label: 'Receptionist' }, { value: 'admin', label: 'Administrator' }]} />
+          <Input label="Email" value={staffForm.email} onChange={e => setStaffForm(p => ({ ...p, email: e.target.value }))} type="email" />
+          <Input label="Phone" value={staffForm.phone} onChange={e => setStaffForm(p => ({ ...p, phone: e.target.value }))} />
+          <div className={styles.modalActions}><Button variant="secondary" onClick={() => setShowStaffModal(false)}>Cancel</Button><Button onClick={saveStaff}>{editingStaff ? 'Save Changes' : 'Add Staff'}</Button></div>
         </div>
       </Modal>
     </div>
