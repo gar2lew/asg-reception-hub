@@ -15,7 +15,7 @@ import { DrapsPage } from '../features/draps/DrapsPage';
 import { PreviousReportsPage } from '../features/draps/PreviousReportsPage';
 import { DrapsPrintPage } from '../features/draps/DrapsPrintPage';
 import { LoginPage } from '../features/auth/LoginPage';
-import { isAuthenticated } from '../services/authService';
+import { isAuthenticated, isAdmin } from '../services/authService';
 import type { ReactNode } from 'react';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -26,6 +26,11 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 function LoginRoute() {
   const navigate = useNavigate();
   return <LoginPage onLogin={() => navigate('/', { replace: true })} />;
+}
+
+function AdminRoute({ children }: { children: ReactNode }) {
+  if (!isAdmin()) return <Navigate to="/" replace />;
+  return <>{children}</>;
 }
 
 export const router = createBrowserRouter([
@@ -42,7 +47,7 @@ export const router = createBrowserRouter([
       { path: 'stock', element: <StockPage /> },
       { path: 'orders', element: <OrdersPage /> },
       { path: 'printing', element: <PrintingPage /> },
-      { path: 'admin', element: <AdminPage /> },
+      { path: 'admin', element: <AdminRoute><AdminPage /></AdminRoute> },
       { path: 'representatives', element: <RepresentativesPage /> },
       { path: 'draps', element: <DrapsPage /> },
       { path: 'draps/previous', element: <PreviousReportsPage /> },

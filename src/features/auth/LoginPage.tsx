@@ -10,10 +10,12 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const canSubmit = name.trim() !== '' && /^\d{4}$/.test(pin) && !loading;
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!name.trim() || !pin.trim()) { setError('Please enter your name and PIN.'); return; }
+    if (!name.trim()) { setError('Please select your name.'); return; }
+    if (!/^\d{4}$/.test(pin)) { setError('PIN must be exactly 4 digits.'); return; }
     setLoading(true);
     try {
       const result = await login(name.trim(), pin.trim());
@@ -56,7 +58,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           <form onSubmit={handleSubmit} className={styles.form}>
             <div className={styles.field}>
               <label htmlFor="staff-name" className={styles.fieldLabel}>Staff Name</label>
-              <select id="staff-name" className={styles.nameSelect} value={name} onChange={e => setName(e.target.value)}>
+              <select id="staff-name" className={styles.nameSelect} value={name} disabled={loading} onChange={e => setName(e.target.value)}>
                 <option value="">Select your name</option>
                 {staffNames.map(n => <option key={n} value={n}>{n}</option>)}
               </select>
@@ -68,11 +70,12 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               placeholder="Enter your PIN"
               value={pin}
               onChange={e => setPin(e.target.value)}
-              maxLength={6}
+              maxLength={4}
               autoComplete="off"
+              disabled={loading}
               error={error || undefined}
             />
-            <Button type="submit" size="lg" disabled={loading} className={styles.signInBtn}>
+            <Button type="submit" size="lg" disabled={!canSubmit} className={styles.signInBtn}>
               <LogIn size={18} />
               {loading ? 'Signing in...' : 'Sign In'}
             </Button>
