@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const firebaseMocks = vi.hoisted(() => ({
   db: undefined as any,
   pinValid: false,
+  pepperValue: 'test-pepper',
+  comparedValue: undefined as string | undefined,
   tokenClaims: undefined as any,
   user: {
     displayName: 'Real Administrator',
@@ -35,11 +37,14 @@ vi.mock('firebase-admin/firestore', () => {
 });
 
 vi.mock('firebase-functions/params', () => ({
-  defineSecret: () => ({ value: () => 'test-pepper' }),
+  defineSecret: () => ({ value: () => firebaseMocks.pepperValue }),
 }));
 
 vi.mock('bcrypt', () => ({
-  compare: async () => firebaseMocks.pinValid,
+  compare: async (value: string) => {
+    firebaseMocks.comparedValue = value;
+    return firebaseMocks.pinValid;
+  },
 }));
 
 vi.mock('firebase-functions/v2/https', () => {
@@ -289,6 +294,8 @@ beforeEach(() => {
     customClaims: { role: 'administrator', office: 'brisbane' },
   };
   firebaseMocks.pinValid = false;
+  firebaseMocks.pepperValue = 'test-pepper';
+  firebaseMocks.comparedValue = undefined;
   firebaseMocks.tokenClaims = undefined;
 });
 
@@ -547,6 +554,16 @@ describe('applyStockMovement security and concurrency', () => {
 });
 
 describe('operationalLogin validation and concurrency', () => {
+  it('normalizes accidental whitespace around the Base64 pepper before PIN verification', async () => {
+    firebaseMocks.db = createLoginFirestore();
+    firebaseMocks.pinValid = true;
+    firebaseMocks.pepperValue = 'test-pepper\r\n';
+
+    await expect(call(operationalLogin, { accountKey: 'brisbane-reception', pin: '1234' }, null))
+      .resolves.toMatchObject({ customToken: 'custom-token' });
+    expect(firebaseMocks.comparedValue).toBe('1234test-pepper');
+  });
+
   it('rejects nullable callable data as invalid-argument', async () => {
     await expect(call(operationalLogin, null as any, null))
       .rejects.toMatchObject({ code: 'invalid-argument' });

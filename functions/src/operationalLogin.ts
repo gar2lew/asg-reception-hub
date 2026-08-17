@@ -112,7 +112,11 @@ export const operationalLogin = https.onCall(
       throw new https.HttpsError('internal', 'Authentication unavailable.');
     }
 
-    const pepperedPin = pin + pepper.value();
+    const pepperValue = pepper.value().trim();
+    if (!pepperValue) {
+      throw new https.HttpsError('internal', 'Authentication unavailable.');
+    }
+    const pepperedPin = pin + pepperValue;
     const pinValid = await bcrypt.compare(pepperedPin, account.pinHash);
 
     if (!pinValid) {
