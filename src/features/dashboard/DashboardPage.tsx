@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Settings, ArrowRight, ExternalLink, BookOpen, Play, Phone, Mail, AlertTriangle, Eye, EyeOff, ChevronUp, ChevronDown, Check, X } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '../../components/Card/Card';
@@ -40,7 +40,11 @@ export function DashboardPage() {
   const [, refresh] = useState(0); const forceRefresh = () => refresh(n => n + 1);
   const [editing, setEditing] = useState(false);
   const [editWidgets, setEditWidgets] = useState<WidgetConfig[] | null>(null);
-  useMemo(() => { generateDailyTasks(); }, []);
+  useEffect(() => {
+    void generateDailyTasks().catch((error: unknown) => {
+      console.warn('[Dashboard] Daily task generation unavailable:', error instanceof Error ? error.message : 'unknown error');
+    });
+  }, []);
 
   const staffId = session?.staffId || ''; const role = session?.role || '';
   const todayKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;

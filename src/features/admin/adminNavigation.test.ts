@@ -13,6 +13,12 @@ const auth = vi.hoisted(() => ({
 
 vi.mock('../../services/authService.ts', () => auth);
 vi.mock('../../services/authService', () => auth);
+vi.mock('../../repositories/firebase/FirebaseTaskDefinitionRepository', () => ({
+  FirebaseTaskDefinitionRepository: class {
+    getAll = vi.fn().mockResolvedValue([]);
+    getActive = vi.fn().mockResolvedValue([]);
+  },
+}));
 
 type RouterModule = typeof import('../../app/Router');
 let router: RouterModule['router'];
